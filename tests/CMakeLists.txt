@@ -16,6 +16,19 @@ add_executable(core_tests
     core/test_screen.cpp
     core/test_conformance.cpp
     core/test_wcwidth.cpp
+    core/test_emulator_dispatch.cpp
+    core/test_screen_motion.cpp
+    core/test_screen_region.cpp
+    core/test_screen_erase.cpp
+    core/test_screen_scroll.cpp
+    core/test_screen_sgr.cpp
+    core/test_screen_modes.cpp
+    core/test_screen_mode_behaviors.cpp
+    core/test_screen_keyboard_modes.cpp
+    core/test_screen_tabs.cpp
+    core/test_screen_save_restore.cpp
+    core/test_screen_charsets.cpp
+    core/test_screen_wrapped.cpp
 )
 target_include_directories(core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 target_link_libraries(core_tests PRIVATE qtermx_core)

@@ -43,23 +43,6 @@ int rgbParam(const Params& params, int start)
                rgbComponent(saturate(params.get(start + 2))));
 }
 
-using CsiHandler = void (Emulator::*)(const Params&);
-using EscHandler = void (Emulator::*)();
-
-// libc++ (C++17) has no std::hash for tuples — combine the string keys
-// (one fold for any tuple arity).
-template <typename Tuple>
-struct TupleHash {
-    size_t operator()(const Tuple& t) const
-    {
-        size_t h = 0;
-        std::apply([&h](const auto&... parts) {
-            ((h ^= std::hash<std::string>{}(parts) + 0x9E3779B9 + (h << 6) + (h >> 2)), ...);
-        }, t);
-        return h;
-    }
-};
-
 } // namespace
 
 // ============================================================================
@@ -102,81 +85,91 @@ void Emulator::execute(int code)
     }
 }
 
-void Emulator::csiDispatch(std::string intermediates, std::string prefix, Params params,
-                           std::string final)
+// Static member definitions (declared in emulator.h).
+const std::unordered_map<std::tuple<std::string, std::string, std::string>,
+                         Emulator::CsiHandler,
+                         TupleHash<std::tuple<std::string, std::string, std::string>>>
+    Emulator::kCsiDispatch = {
+        {{"", "", "h"}, &Emulator::sm},       // SM — set ANSI modes
+        {{"", "", "l"}, &Emulator::rm},       // RM — reset ANSI modes
+        {{"?", "", "h"}, &Emulator::decset},  // DECSET
+        {{"?", "", "l"}, &Emulator::decrst},  // DECRST
+        {{"", "", "m"}, &Emulator::sgr},      // SGR — graphic rendition
+        {{"", "", "r"}, &Emulator::decstbm},  // DECSTBM — scroll region
+        {{"", "", "A"}, &Emulator::cuu},      // CUU — cursor up
+        {{"", "", "B"}, &Emulator::cud},      // CUD — cursor down
+        {{"", "", "C"}, &Emulator::cuf},      // CUF — cursor forward
+        {{"", "", "D"}, &Emulator::cub},      // CUB — cursor backward
+        {{"", "", "E"}, &Emulator::cnl},      // CNL — cursor next line
+        {{"", "", "F"}, &Emulator::cpl},      // CPL — cursor preceding line
+        {{"", "", "H"}, &Emulator::cup},      // CUP — cursor position
+        {{"", "", "f"}, &Emulator::cup},      // HVP — same as CUP
+        {{"", "", "G"}, &Emulator::cha},      // CHA — cursor horizontal absolute
+        {{"", "", "d"}, &Emulator::vpa},      // VPA — cursor vertical absolute
+        {{"", "", "J"}, &Emulator::ed},       // ED — erase in display
+        {{"", "", "K"}, &Emulator::el},       // EL — erase in line
+        {{"", "", "X"}, &Emulator::ech},      // ECH — erase characters
+        {{"", "", "@"}, &Emulator::ich},      // ICH — insert characters
+        {{"", "", "L"}, &Emulator::il},       // IL — insert lines
+        {{"", "", "M"}, &Emulator::dl},       // DL — delete lines
+        {{"", "", "P"}, &Emulator::dch},      // DCH — delete characters
+        {{"", "", "S"}, &Emulator::su},       // SU — scroll up
+        {{"", "", "T"}, &Emulator::sd},       // SD — scroll down
+        {{"", "", "g"}, &Emulator::tbc},      // TBC — tab clear
+        {{"", "", "I"}, &Emulator::cht},      // CHT — cursor forward tabulation
+        {{"", "", "Z"}, &Emulator::cbt},      // CBT — cursor backward tabulation
+        {{"", "", "s"}, &Emulator::save},     // CSI s — save cursor (DECSC alias)
+        {{"", "", "u"}, &Emulator::restore},  // CSI u — restore cursor
+};
+
+const std::unordered_map<std::tuple<std::string, std::string>, Emulator::EscHandler,
+                         TupleHash<std::tuple<std::string, std::string>>>
+    Emulator::kEscDispatch = {
+        {{"", "D"}, &Emulator::ind},        // IND — index
+        {{"", "E"}, &Emulator::nel},        // NEL — next line (CR + index)
+        {{"", "M"}, &Emulator::ri},         // RI — reverse index
+        {{"", "n"}, &Emulator::ls2},        // LS2 — shift to G2
+        {{"", "o"}, &Emulator::ls3},        // LS3 — shift to G3
+        {{"", "~"}, &Emulator::ls1r},       // LS1R — shift to G1
+        {{"", "}"}, &Emulator::ls2r},       // LS2R — shift to G2
+        {{"", "|"}, &Emulator::ls3r},       // LS3R — shift to G3
+        {{"", "H"}, &Emulator::hts},        // HTS — set tab stop
+        {{"", "7"}, &Emulator::decsc},      // DECSC — save cursor
+        {{"", "8"}, &Emulator::decrc},      // DECRC — restore cursor
+        {{"#", "8"}, &Emulator::decaln},    // DECALN — screen alignment test
+};
+
+Emulator::CsiHandler Emulator::lookupCsi(const std::string& intermediates,
+                                         const std::string& prefix, const std::string& final)
 {
-    // CSI dispatch table: (prefix, intermediates, final) → handler. A
-    // sequence whose intermediates match no entry falls back to the
-    // bare final (no intermediates) — the xterm.js "bare final" rule.
-    static const std::unordered_map<std::tuple<std::string, std::string, std::string>,
-                                    CsiHandler, TupleHash<std::tuple<std::string, std::string, std::string>>>
-        kCsiDispatch = {
-            {{"", "", "h"}, &Emulator::sm},       // SM — set ANSI modes
-            {{"", "", "l"}, &Emulator::rm},       // RM — reset ANSI modes
-            {{"?", "", "h"}, &Emulator::decset},  // DECSET
-            {{"?", "", "l"}, &Emulator::decrst},  // DECRST
-            {{"", "", "m"}, &Emulator::sgr},      // SGR — graphic rendition
-            {{"", "", "r"}, &Emulator::decstbm},  // DECSTBM — scroll region
-            {{"", "", "A"}, &Emulator::cuu},      // CUU — cursor up
-            {{"", "", "B"}, &Emulator::cud},      // CUD — cursor down
-            {{"", "", "C"}, &Emulator::cuf},      // CUF — cursor forward
-            {{"", "", "D"}, &Emulator::cub},      // CUB — cursor backward
-            {{"", "", "E"}, &Emulator::cnl},      // CNL — cursor next line
-            {{"", "", "F"}, &Emulator::cpl},      // CPL — cursor preceding line
-            {{"", "", "H"}, &Emulator::cup},      // CUP — cursor position
-            {{"", "", "f"}, &Emulator::cup},      // HVP — same as CUP
-            {{"", "", "G"}, &Emulator::cha},      // CHA — cursor horizontal absolute
-            {{"", "", "d"}, &Emulator::vpa},      // VPA — cursor vertical absolute
-            {{"", "", "J"}, &Emulator::ed},       // ED — erase in display
-            {{"", "", "K"}, &Emulator::el},       // EL — erase in line
-            {{"", "", "X"}, &Emulator::ech},      // ECH — erase characters
-            {{"", "", "@"}, &Emulator::ich},      // ICH — insert characters
-            {{"", "", "L"}, &Emulator::il},       // IL — insert lines
-            {{"", "", "M"}, &Emulator::dl},       // DL — delete lines
-            {{"", "", "P"}, &Emulator::dch},      // DCH — delete characters
-            {{"", "", "S"}, &Emulator::su},       // SU — scroll up
-            {{"", "", "T"}, &Emulator::sd},       // SD — scroll down
-            {{"", "", "g"}, &Emulator::tbc},      // TBC — tab clear
-            {{"", "", "I"}, &Emulator::cht},      // CHT — cursor forward tabulation
-            {{"", "", "Z"}, &Emulator::cbt},      // CBT — cursor backward tabulation
-            {{"", "", "s"}, &Emulator::save},     // CSI s — save cursor (DECSC alias)
-            {{"", "", "u"}, &Emulator::restore},  // CSI u — restore cursor
-    };
     auto it = kCsiDispatch.find(std::make_tuple(prefix, intermediates, final));
     if (it == kCsiDispatch.end() && !intermediates.empty()) {
         it = kCsiDispatch.find(std::make_tuple(prefix, "", final));
     }
-    if (it != kCsiDispatch.end()) {
-        (this->*(it->second))(params);
+    return it != kCsiDispatch.end() ? it->second : nullptr;
+}
+
+Emulator::EscHandler Emulator::lookupEsc(const std::string& intermediates,
+                                         const std::string& final)
+{
+    auto it = kEscDispatch.find(std::make_tuple(intermediates, final));
+    return it != kEscDispatch.end() ? it->second : nullptr;
+}
+
+void Emulator::csiDispatch(std::string intermediates, std::string prefix, Params params,
+                           std::string final)
+{
+    CsiHandler handler = lookupCsi(intermediates, prefix, final);
+    if (handler != nullptr) {
+        (this->*handler)(params);
     }
 }
 
 void Emulator::escapeDispatch(std::string intermediates, std::string final)
 {
-    // Escape dispatch table: (intermediates, final) → handler. Exact
-    // match only — intermediate-bearing escapes (e.g. `ESC # 8` DECALN)
-    // parse-and-ignore until their step, so no bare-final fallback
-    // (xterm.js registers ESC handlers by exact key, unlike CSI's
-    // bare-final rule).
-    static const std::unordered_map<std::tuple<std::string, std::string>, EscHandler,
-                                    TupleHash<std::tuple<std::string, std::string>>>
-        kEscDispatch = {
-            {{"", "D"}, &Emulator::ind},        // IND — index
-            {{"", "E"}, &Emulator::nel},        // NEL — next line (CR + index)
-            {{"", "M"}, &Emulator::ri},         // RI — reverse index
-            {{"", "n"}, &Emulator::ls2},        // LS2 — shift to G2
-            {{"", "o"}, &Emulator::ls3},        // LS3 — shift to G3
-            {{"", "~"}, &Emulator::ls1r},       // LS1R — shift to G1
-            {{"", "}"}, &Emulator::ls2r},       // LS2R — shift to G2
-            {{"", "|"}, &Emulator::ls3r},       // LS3R — shift to G3
-            {{"", "H"}, &Emulator::hts},        // HTS — set tab stop
-            {{"", "7"}, &Emulator::decsc},      // DECSC — save cursor
-            {{"", "8"}, &Emulator::decrc},      // DECRC — restore cursor
-            {{"#", "8"}, &Emulator::decaln},    // DECALN — screen alignment test
-    };
-    auto it = kEscDispatch.find(std::make_tuple(intermediates, final));
-    if (it != kEscDispatch.end()) {
-        (this->*(it->second))();
+    EscHandler handler = lookupEsc(intermediates, final);
+    if (handler != nullptr) {
+        (this->*handler)();
     }
 }
 

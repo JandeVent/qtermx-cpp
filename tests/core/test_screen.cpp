@@ -2,68 +2,13 @@
 // wrap, width-aware print, resize reflow (ports of tests/screen/
 // test_screen.py, test_c0.py, test_wrap.py, test_width.py, test_resize.py).
 // Tests drive the full pipeline Parser → Emulator → Screen.
-#include <memory>
 #include <stdexcept>
 
-#include "emulator.h"
 #include "harness.h"
-#include "parser.h"
-#include "screen.h"
+#include "test_pipeline.h"
 
 using namespace qtermx;
-
-namespace {
-
-struct Pipeline {
-    Screen screen;
-    Emulator emulator;
-    Parser parser;
-
-    Pipeline(int lines, int columns)
-        : screen(lines, columns)
-        , emulator(screen)
-        , parser(&emulator)
-    {
-    }
-
-    void feed(std::u32string_view text)
-    {
-        parser.feed(text);
-        parser.flush();
-    }
-};
-
-std::unique_ptr<Pipeline> makePipeline(int lines = 24, int columns = 80)
-{
-    return std::make_unique<Pipeline>(lines, columns);
-}
-
-// Feed text through the full pipeline and return the screen.
-Screen& feedTo(std::u32string_view text, int lines = 24, int columns = 80)
-{
-    static std::unique_ptr<Pipeline> p;
-    p = makePipeline(lines, columns);
-    p->feed(text);
-    return p->screen;
-}
-
-std::vector<std::string> splitLines(const std::string& s)
-{
-    std::vector<std::string> lines;
-    size_t start = 0;
-    while (true) {
-        const size_t nl = s.find('\n', start);
-        if (nl == std::string::npos) {
-            lines.push_back(s.substr(start));
-            break;
-        }
-        lines.push_back(s.substr(start, nl - start));
-        start = nl + 1;
-    }
-    return lines;
-}
-
-} // namespace
+using namespace qtermx::test;
 
 // ---------------------------------------------------------------------------
 // T1 — Dumb screen tracer bullet (test_screen.py)

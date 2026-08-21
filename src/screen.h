@@ -310,6 +310,11 @@ public:
     void insertChars(int n = 1);
     void deleteChars(int n = 1);
 
+    // The active screen's scroll region bounds (Python exposes
+    // scroll_top/scroll_bottom as properties — the tests read them).
+    int& scrollTop() { return m_screens[m_active].scrollTop; }
+    int& scrollBottom() { return m_screens[m_active].scrollBottom; }
+
 private:
     // Active modes, one set per namespace (ANSI / DEC-private). DECAWM
     // starts on — autowrap is the default; DECTCEM too — the cursor
@@ -335,8 +340,6 @@ private:
 
     std::vector<Row>& activeGrid() { return m_screens[m_active].grid; }
     const std::vector<Row>& activeGrid() const { return m_screens[m_active].grid; }
-    int& scrollTop() { return m_screens[m_active].scrollTop; }
-    int& scrollBottom() { return m_screens[m_active].scrollBottom; }
     std::set<int>& tabStops() { return m_screens[m_active].tabStops; }
     std::optional<SavedState>& savedState() { return m_screens[m_active].savedState; }
 

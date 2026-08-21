@@ -134,12 +134,14 @@ Port the Python test suite layer by layer, keeping the same oracle:
   `tests/`, `bench/`, `references/`), test harnesses (assert-based core harness +
   QTest), vendored xterm.js fixture corpus, `ctest` green
 - Phase 1 (core pipeline) done: `Parser` (15-state VT500), `Dispatcher`,
-  `Params`, `Screen` (dumb subset: print, C0, wrap, width, resize reflow,
-  scrollback read API), `Emulator` (C0 + full CSI/ESC tables), Qt-free
-  incremental UTF-8 decoder, wcwidth (Kuhn table); 235 tests green incl. the
-  xterm fixture corpus (12/13 — t0004-LF needs a pty)
+  `Params`, `Screen`, `Emulator` (C0 + full CSI/ESC tables), Qt-free
+  incremental UTF-8 decoder, wcwidth (Kuhn table + regional indicators)
+- Phase 2 (text-mode CSI tests) done: dispatch completeness, motion, erase,
+  SGR, modes + behaviors, keyboard modes, regions, scroll/row ops, tabs,
+  save/restore, charsets, wrapped markers — 412 tests green incl. the xterm
+  fixture corpus (12/13 — t0004-LF needs a pty)
 - Skeleton app: `main.cpp` + empty `MainWindow`, CMake build working
-- Next steps: port the Phase 2 tests (CSI family: motion, erase, SGR, modes,
-  regions, charsets, save/restore) — the code is already ported, the tests
-  verify it — then screen (②), then PTY + session (glue), then renderer +
-  widget (③) — follow `ROADMAP.md` phase order (Phase 2 → 6)
+- Next steps: Phase 3 (alt screen, DECALN, reverse video, truecolor,
+  palette tests) — the code is already ported, the tests verify it — then
+  PTY + session (glue), then renderer + widget (③) — follow `ROADMAP.md`
+  phase order (Phase 3 → 6)

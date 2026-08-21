@@ -107,7 +107,7 @@ zero Qt includes. ✅ (235 tests green; `qtermx_core` has zero Qt dependencies)
 
 ---
 
-## Phase 2 — Text-mode CSI
+## Phase 2 — Text-mode CSI ✅ done
 
 **Goal:** everything a text-mode program (`ls`, `less`, `man`) emits. Ports
 pyqtermx Phase 2. The `Emulator` dispatch tables and the `Screen` CSI family
@@ -123,18 +123,21 @@ phase ports the tests that verify them.
 
 ### Tests to port
 
-- `tests/emulator/test_dispatch.py`
+- `tests/emulator/test_dispatch.py` ✅ (dispatch tables exposed as public
+  statics + lookup functions for the completeness checks)
 - `tests/screen/`: `test_motion.py`, `test_erase.py`, `test_sgr.py`,
   `test_modes.py`, `test_mode_behaviors.py`, `test_keyboard_modes.py`,
   `test_region.py`, `test_scroll.py`, `test_tabs.py`, `test_save_restore.py`,
-  `test_charsets.py`, `test_wrapped.py`
+  `test_charsets.py`, `test_wrapped.py` ✅
 
 ### Milestone
 
 `ls | less` and `man` render boxes correctly; fixture `t0080-HT` un-skips (cursor
-motion lands here).
+motion lands here). ✅ (t0080-HT passes since Phase 1; the DEC line-drawing
+charset the boxes are made of is verified by the charsets tests)
 
-**Exit criteria:** all ported tests green; fixture corpus still green.
+**Exit criteria:** all ported tests green; fixture corpus still green. ✅
+(412 tests green; 12/13 fixtures — t0004-LF still needs a pty)
 
 ---
 
