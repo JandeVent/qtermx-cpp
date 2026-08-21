@@ -29,6 +29,11 @@ add_executable(core_tests
     core/test_screen_save_restore.cpp
     core/test_screen_charsets.cpp
     core/test_screen_wrapped.cpp
+    core/test_screen_alt_screen.cpp
+    core/test_screen_decaln.cpp
+    core/test_screen_effective_rendition.cpp
+    core/test_screen_truecolor.cpp
+    core/test_palette.cpp
 )
 target_include_directories(core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 target_link_libraries(core_tests PRIVATE qtermx_core)

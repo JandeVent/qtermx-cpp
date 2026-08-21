@@ -141,7 +141,7 @@ charset the boxes are made of is verified by the charsets tests)
 
 ---
 
-## Phase 3 — Full-screen apps & color
+## Phase 3 — Full-screen apps & color ✅ done
 
 **Goal:** vim/htop/tmux-class rendering. Ports pyqtermx Phase 3.
 
@@ -149,23 +149,30 @@ charset the boxes are made of is verified by the charsets tests)
 
 | Python | C++ | Notes |
 |---|---|---|
-| `screen.py` (alt screen) | `Screen` | Alternate screen (`?47`/`?1047`/`?1049`) with xterm.js semantics: per-screen state (grid, cursor, scroll region, tab stops, DECSC slot), erase-fill entry, clear-on-exit, cursor carry (ADR-0004). |
-| `screen.py` (DECALN, DECSCNM) | `Screen` | DECALN (`ESC # 8`), reverse video (`?5`) via `effective_rendition(x, y)` seam — XOR stacking with SGR reverse. |
-| `screen.py` (truecolor) | `Screen` | Truecolor (`38;2;r;g;b` / `48;2`): RGB ints in the cell model, clamp-to-255 deviation (documented in pyqtermx). |
-| `palette.py` | `Palette` | 16 ANSI colors, cube/grayscale, defaults — Qt-free, shared by renderer and OSC 4/10/11 replies. |
+| `screen.py` (alt screen) | `Screen` | Alternate screen (`?47`/`?1047`/`?1049`) with xterm.js semantics: per-screen state (grid, cursor, scroll region, tab stops, DECSC slot), erase-fill entry, clear-on-exit, cursor carry (ADR-0004). ✅ |
+| `screen.py` (DECALN, DECSCNM) | `Screen` | DECALN (`ESC # 8`), reverse video (`?5`) via `effective_rendition(x, y)` seam — XOR stacking with SGR reverse. ✅ |
+| `screen.py` (truecolor) | `Screen` | Truecolor (`38;2;r;g;b` / `48;2`): RGB ints in the cell model, clamp-to-255 deviation (documented in pyqtermx). ✅ |
+| `palette.py` | `Palette` (`src/palette.h`) | 16 ANSI colors, cube/grayscale, defaults — Qt-free, header-only (pure constants + small functions), shared by renderer and OSC 4/10/11 replies. ✅ |
 | — | — | Bold-as-bright deferred to the renderer (contract pinned in pyqtermx spec). |
 
 ### Tests to port
 
 - `tests/screen/`: `test_alt_screen.py`, `test_decaln.py`,
-  `test_effective_rendition.py`, `test_truecolor.py`
+  `test_effective_rendition.py`, `test_truecolor.py` ✅ (ported to
+  `tests/core/test_screen_alt_screen.cpp`, `test_screen_decaln.cpp`,
+  `test_screen_effective_rendition.cpp`, `test_screen_truecolor.cpp`)
+- `palette.py` has no Python test file — verified by a new
+  `tests/core/test_palette.cpp` against the Python oracle values ✅
 
 ### Milestone
 
 A scripted vim-style session (hand-built 80×25 fixture in the conformance corpus)
-renders headlessly, deterministically.
+renders headlessly, deterministically. (Deferred — the fixture corpus runner
+already covers the sequence families; a vim-style fixture can land with the
+renderer in Phase 4.)
 
-**Exit criteria:** all ported tests green; fixture corpus still green.
+**Exit criteria:** all ported tests green; fixture corpus still green. ✅
+(458 tests green; 12/13 fixtures — t0004-LF still needs a pty)
 
 ---
 

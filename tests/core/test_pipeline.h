@@ -67,6 +67,16 @@ inline std::vector<std::string> splitLines(const std::string& s)
     return lines;
 }
 
+// The text of row `y` with trailing spaces stripped — the Python
+// `"".join(cell.data for cell in line.cells).rstrip(" ")` the screen
+// tests use to read a row's glyphs.
+inline std::string rowText(const Screen& screen, int y)
+{
+    std::string row = splitLines(screen.render())[y];
+    const size_t last = row.find_last_not_of(' ');
+    return last == std::string::npos ? "" : row.substr(0, last + 1);
+}
+
 // Python str.strip() equivalent: trim leading/trailing whitespace
 // (spaces and newlines).
 inline std::string strip(const std::string& s)

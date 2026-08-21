@@ -315,6 +315,10 @@ public:
     int& scrollTop() { return m_screens[m_active].scrollTop; }
     int& scrollBottom() { return m_screens[m_active].scrollBottom; }
 
+    // The active screen's tab stops (Python exposes `_tab_stops` — the
+    // tests read them; the m_ prefix waiver applies as above).
+    std::set<int>& tabStops() { return m_screens[m_active].tabStops; }
+
 private:
     // Active modes, one set per namespace (ANSI / DEC-private). DECAWM
     // starts on — autowrap is the default; DECTCEM too — the cursor
@@ -340,7 +344,6 @@ private:
 
     std::vector<Row>& activeGrid() { return m_screens[m_active].grid; }
     const std::vector<Row>& activeGrid() const { return m_screens[m_active].grid; }
-    std::set<int>& tabStops() { return m_screens[m_active].tabStops; }
     std::optional<SavedState>& savedState() { return m_screens[m_active].savedState; }
 
     // -- Construction helpers ------------------------------------------------
