@@ -6,8 +6,19 @@ add_executable(core_tests
     core/test_main.cpp
     core/test_harness_smoke.cpp
     core/test_fixture_corpus.cpp
+    core/test_parser_ground.cpp
+    core/test_parser_csi.cpp
+    core/test_parser_escape.cpp
+    core/test_parser_dcs.cpp
+    core/test_parser_osc.cpp
+    core/test_parser_states.cpp
+    core/test_parser_hardening.cpp
+    core/test_screen.cpp
+    core/test_conformance.cpp
+    core/test_wcwidth.cpp
 )
 target_include_directories(core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core)
+target_link_libraries(core_tests PRIVATE qtermx_core)
 add_test(NAME core_tests COMMAND core_tests)
 
 # --- Qt layer tests (QTest) -------------------------------------------------

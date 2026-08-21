@@ -43,6 +43,17 @@ endif()
 
 target_link_libraries(qtermx-cpp PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 
+# Qt-free core library (parser, dispatcher, emulator, screen, params,
+# utf8, wcwidth) — headless-testable, zero Qt dependencies.
+add_library(qtermx_core STATIC
+    src/emulator.cpp
+    src/parser.cpp
+    src/screen.cpp
+    src/utf8_decoder.cpp
+    src/wcwidth.cpp
+)
+target_include_directories(qtermx_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
 # explicit, fixed bundle identifier manually though.

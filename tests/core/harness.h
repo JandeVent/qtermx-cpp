@@ -43,18 +43,29 @@ inline int runAll()
         try {
             tc.fn();
             std::printf("[PASS] %s\n", tc.name);
+            std::fflush(stdout);
             ++passed;
         } catch (const CheckFailed& e) {
             std::printf("[FAIL] %s\n       %s\n", tc.name, e.message.c_str());
+            std::fflush(stdout);
             ++failed;
         } catch (const std::exception& e) {
             std::printf("[FAIL] %s\n       unexpected exception: %s\n",
                         tc.name, e.what());
+            std::fflush(stdout);
             ++failed;
         }
     }
     std::printf("\n%d passed, %d failed\n", passed, failed);
     return failed == 0 ? 0 : 1;
+}
+
+// Context-rich check: throws CheckFailed with a caller-built message.
+inline void check(bool cond, const std::string& message)
+{
+    if (!cond) {
+        throw CheckFailed{message};
+    }
 }
 
 } // namespace qtermx::test

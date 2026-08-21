@@ -4,6 +4,7 @@ build/
 
 # Qt Creator
 .qtcreator/
+.xCode/
 
 # macOS
 .DS_Store

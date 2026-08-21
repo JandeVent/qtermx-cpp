@@ -87,6 +87,9 @@ Python module → C++ counterpart (follow this naming when creating files):
 | `widget.py` | `TerminalWidget` | ③ | CPU renderer widget, input bridge |
 | `input.py` | `InputEncoder` | ③ | `QKeyEvent` → terminal bytes, paste encoding |
 | `selection.py` | `Selection` | ③ | Mouse selection state (word/line/rectangle) |
+| `params.py` | `Params`/`ParamsBuilder` (`src/params.h`) | ① | Typed CSI parameters (zero-default-mode, 0xFFFFFFFF cap) |
+| UTF-8 decoding | `Utf8Decoder` (`src/utf8_decoder.h`) | ① | Incremental decode, `errors="replace"` semantics (ADR-0001) |
+| `wcwidth` (dep) | `wcwidth` (`src/wcwidth.h`) | ① | Cell-width measurement (Kuhn table + regional indicators) |
 | `__main__.py` | `main.cpp` | app | Window + session lifecycle |
 
 Cython fast paths (`_render_fast.pyx`, `_screen_fast.pyx`, `parser.pyx`) are
@@ -130,8 +133,13 @@ Port the Python test suite layer by layer, keeping the same oracle:
 - Phase 0 (project setup) done: git repo, directory layout (`src/`, `src/gui/`,
   `tests/`, `bench/`, `references/`), test harnesses (assert-based core harness +
   QTest), vendored xterm.js fixture corpus, `ctest` green
+- Phase 1 (core pipeline) done: `Parser` (15-state VT500), `Dispatcher`,
+  `Params`, `Screen` (dumb subset: print, C0, wrap, width, resize reflow,
+  scrollback read API), `Emulator` (C0 + full CSI/ESC tables), Qt-free
+  incremental UTF-8 decoder, wcwidth (Kuhn table); 235 tests green incl. the
+  xterm fixture corpus (12/13 — t0004-LF needs a pty)
 - Skeleton app: `main.cpp` + empty `MainWindow`, CMake build working
-- No core layers yet
-- Next steps: port the parser (①) with its fixture runner, then screen (②), then
-  PTY + session (glue), then renderer + widget (③) — follow `ROADMAP.md` phase
-  order (Phase 1 → 6)
+- Next steps: port the Phase 2 tests (CSI family: motion, erase, SGR, modes,
+  regions, charsets, save/restore) — the code is already ported, the tests
+  verify it — then screen (②), then PTY + session (glue), then renderer +
+  widget (③) — follow `ROADMAP.md` phase order (Phase 2 → 6)

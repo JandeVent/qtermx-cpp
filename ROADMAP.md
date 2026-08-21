@@ -26,8 +26,8 @@ posts commands back; it never reads the model (ADR-0005).
 |---|---|---|---|
 | `parser.py` | `Parser` | ① | Phase 1 |
 | `dispatcher.py` | `Dispatcher` | ① | Phase 1 |
-| `emulator.py` | `Emulator` | ② | Phase 2 |
-| `screen.py` | `Screen` | ② | Phase 1 (dumb) → Phase 2–4 (full) |
+| `emulator.py` | `Emulator` | ② | Phase 1 (code) → Phase 2 (tests) |
+| `screen.py` | `Screen` | ② | Phase 1 (code) → Phase 2–4 (tests) |
 | `palette.py` | `Palette` | ② | Phase 3 |
 | `ptyspawn.py` | `Pty` | 0 | Phase 4 |
 | `session.py` | `Session` | glue | Phase 4 |
@@ -35,7 +35,9 @@ posts commands back; it never reads the model (ADR-0005).
 | `widget.py` | `TerminalWidget` | ③ | Phase 4 |
 | `input.py` | `InputEncoder` | ③ | Phase 4 |
 | `selection.py` | `Selection` | ③ | Phase 4 |
-| `params.py` | fold into `Parser`/`Dispatcher` | ① | Phase 1 |
+| `params.py` | `Params`/`ParamsBuilder` (`src/params.h`) | ① | Phase 1 |
+| UTF-8 decoding | `Utf8Decoder` (`src/utf8_decoder.h`) | ① | Phase 1 |
+| `wcwidth` (dep) | `wcwidth` (`src/wcwidth.h`) | ① | Phase 1 |
 | `__main__.py` | `main.cpp` | app | Phase 4 |
 
 ## Non-goals (do not port)
@@ -69,7 +71,7 @@ test per harness; fixture corpus present.
 
 ---
 
-## Phase 1 — Core pipeline (parser + dumb screen + print path)
+## Phase 1 — Core pipeline (parser + dumb screen + print path) ✅ done
 
 **Goal:** byte stream in, text grid out. Ports pyqtermx Phase 1.
 
@@ -77,37 +79,40 @@ test per harness; fixture corpus present.
 
 | Python | C++ | Notes |
 |---|---|---|
-| `parser.py` | `Parser` | 15-state VT500 state machine (GROUND, ESCAPE, CSI_ENTRY, CSI_PARAM, CSI_INTERMEDIATE, OSC_STRING, CHARSET, DCS_ENTRY…), DCS/APC/SOS/PM parse-and-ignore, OSC payload collection (BEL / ST / two-byte ST termination). **Never line-based** — input can be split mid-sequence arbitrarily. |
-| `dispatcher.py` | `Dispatcher` | Parser→emulator event protocol (print, execute, csi_dispatch, esc_dispatch, osc_dispatch, dcs_hook/put/unhook…). |
-| `params.py` | fold into `Parser`/`Dispatcher` | Param parsing (digits, `;`, `:`, private markers). |
-| `screen.py` (dumb subset) | `Screen` | Grid of cells (char, fg, bg, bold, underline, reverse, blink), cursor, CR/LF/BS/TAB/BEL, **deferred (pending) wrap**, wide + combining chars (explicit continuation cells), 256-color cell model, **resize reflow** (re-wrap at new width, ADR-0003), `render()` → text for verification. |
-| UTF-8 decoding | incremental decoder | **Qt-free** (core must not depend on Qt): hand-rolled incremental UTF-8 decoder upstream of the parser; C1 controls (e.g. `0x9B` = CSI) arrive directly (ADR-0001). |
-| `test_conformance.py` | fixture runner | Feed `.in`/`.text` pairs through Parser→Dispatcher→Screen, diff against `render()`. |
-| `tests/recorder.py` | `Recorder` (test seam) | Dispatcher-protocol event recorder — records every dispatch call as `(event, payload)` tuples; the parser tests' oracle. |
+| `parser.py` | `Parser` | 15-state VT500 state machine (GROUND, ESCAPE, CSI_ENTRY, CSI_PARAM, CSI_INTERMEDIATE, OSC_STRING, CHARSET, DCS_ENTRY…), DCS/APC/SOS/PM parse-and-ignore, OSC payload collection (BEL / ST / two-byte ST termination). **Never line-based** — input can be split mid-sequence arbitrarily. ✅ |
+| `dispatcher.py` | `Dispatcher` | Parser→emulator event protocol (print, execute, csi_dispatch, esc_dispatch, osc_dispatch, dcs_hook/put/unhook…). ✅ |
+| `params.py` | `Params`/`ParamsBuilder` (`src/params.h`) | Param parsing (digits, `;`, `:`, private markers), zero-default-mode, 0xFFFFFFFF cap. ✅ |
+| `screen.py` (dumb subset) | `Screen` | Grid of cells (char, fg, bg, bold, underline, reverse, blink), cursor, CR/LF/BS/TAB/BEL, **deferred (pending) wrap**, wide + combining chars (explicit continuation cells), 256-color cell model, **resize reflow** (re-wrap at new width, ADR-0003), `render()` → text for verification. ✅ |
+| UTF-8 decoding | incremental decoder | **Qt-free** (core must not depend on Qt): hand-rolled incremental UTF-8 decoder upstream of the parser; C1 controls (e.g. `0x9B` = CSI) arrive directly (ADR-0001). ✅ |
+| `test_conformance.py` | fixture runner | Feed `.in`/`.text` pairs through Parser→Dispatcher→Screen, diff against `render()`. ✅ |
+| `tests/recorder.py` | `Recorder` (test seam) | Dispatcher-protocol event recorder — records every dispatch call as `(event, payload)` tuples; the parser tests' oracle. ✅ |
 
 ### Tests to port
 
 - `tests/parser/` → `tests/parser/`: `test_ground.py`, `test_csi.py`,
   `test_escape.py`, `test_dcs.py`, `test_osc.py`, `test_parser_states.py`,
-  `test_hardening.py`
+  `test_hardening.py` ✅
 - `tests/screen/` → `tests/screen/`: `test_screen.py`, `test_c0.py`,
-  `test_width.py`, `test_wrap.py`, `test_resize.py`
-- `tests/test_conformance.py` → fixture runner
+  `test_width.py`, `test_wrap.py`, `test_resize.py` ✅
+- `tests/test_conformance.py` → fixture runner ✅ (12 of 13 fixtures pass;
+  t0004-LF needs a pty — Phase 4)
 
 ### Milestone
 
 xterm fixture corpus passes; feeding sequences byte-by-byte and in chunks gives
-identical results.
+identical results. ✅
 
 **Exit criteria:** all ported tests green; fixture runner green; core compiles with
-zero Qt includes.
+zero Qt includes. ✅ (235 tests green; `qtermx_core` has zero Qt dependencies)
 
 ---
 
 ## Phase 2 — Text-mode CSI
 
 **Goal:** everything a text-mode program (`ls`, `less`, `man`) emits. Ports
-pyqtermx Phase 2.
+pyqtermx Phase 2. The `Emulator` dispatch tables and the `Screen` CSI family
+were ported ahead of schedule in Phase 1 (the resize tests needed SGR); this
+phase ports the tests that verify them.
 
 ### Port
 
