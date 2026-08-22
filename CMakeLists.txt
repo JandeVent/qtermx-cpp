@@ -88,3 +88,21 @@ endif()
 # Tests (core harness + QTest) — see tests/CMakeLists.txt
 enable_testing()
 add_subdirectory(tests)
+
+# Benchmarks — headless workloads (port of pyqtermx bench/run.py).
+add_executable(qtermx_bench
+    bench/run.cpp
+    src/gui/renderer.cpp
+    src/session.cpp
+    src/pty.cpp
+    src/screen.cpp
+    src/emulator.cpp
+    src/parser.cpp
+    src/utf8_decoder.cpp
+    src/wcwidth.cpp
+)
+target_include_directories(qtermx_bench PRIVATE src src/gui)
+target_link_libraries(qtermx_bench PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+# The Python baselines are from an optimized build — a Debug bench would
+# measure the compiler, not the terminal.
+target_compile_options(qtermx_bench PRIVATE -O2)

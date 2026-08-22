@@ -1,0 +1,8 @@
+{
+  "env": {"stamp": "darwin-clang-qt6.11.0"},
+  "workloads": {
+    "scroll_flood": {"mb_per_s": 5.34461, "lines_per_s": 907496},
+    "htop_incremental": {"rasterize_ms_per_frame": 0.236473, "damaged_rows_fraction": 0.274208},
+    "paste_burst": {"total_ms": 21.3306, "mb_per_s": 45.9251}
+  }
+}
