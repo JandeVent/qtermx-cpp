@@ -82,9 +82,17 @@ void Session::close(double timeout)
         m_queue.push_back(std::move(cmd));
     }
     if (m_thread.joinable()) {
+        // Bounded wait for the reader to finish (the Python joins with
+        // a timeout): the loop's 50 ms select keeps it live, so the
+        // close command lands within the window; the join then
+        // completes immediately.
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::duration<double>(timeout);
+        while (std::chrono::steady_clock::now() < deadline && !m_finished.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
         m_thread.join();
     }
-    (void)timeout;
 }
 
 // -- Reader thread -------------------------------------------------------
@@ -115,7 +123,7 @@ void Session::run()
         emitSnapshot(); // the initial full snapshot (blank screen)
         while (true) {
             if (!drainCommands()) {
-                return;
+                break; // a `close` was applied — stop the loop
             }
             fd_set fds;
             FD_ZERO(&fds);
@@ -123,14 +131,14 @@ void Session::run()
             struct timeval tv {0, 50000}; // 50 ms
             const int ready = select(m_pty->masterFd() + 1, &fds, nullptr, nullptr, &tv);
             if (ready < 0) {
-                return; // pty closed under us, or never existed
+                break; // pty closed under us, or never existed
             }
             if (ready > 0) {
                 const auto data = m_pty->read();
                 if (!data.has_value()) {
                     // Child exited — emit the final state and stop.
                     emitSnapshot();
-                    return;
+                    break;
                 }
                 if (!data->empty()) {
                     process(*data);
@@ -142,6 +150,9 @@ void Session::run()
         // The reader thread must never die with an exception escaping —
         // the session owns the model, and the GUI waits on snapshots.
     }
+    // The cleanup tail runs on every exit path (the Python's `finally`):
+    // the finished flag (isAlive() must go false) and the pty close
+    // (EOF/SIGHUP to the child).
     m_finished.store(true);
     m_pty->close();
 }
