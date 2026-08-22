@@ -101,7 +101,7 @@ void Session::process(const std::string& data)
     // and the bench `_feed` both rely on it.
     m_parser.feedBytes(data);
     m_parser.flush();
-    emit();
+    emitSnapshot();
 }
 
 void Session::setSnapshotCallback(SnapshotCallback callback)
@@ -112,7 +112,7 @@ void Session::setSnapshotCallback(SnapshotCallback callback)
 void Session::run()
 {
     try {
-        emit(); // the initial full snapshot (blank screen)
+        emitSnapshot(); // the initial full snapshot (blank screen)
         while (true) {
             if (!drainCommands()) {
                 return;
@@ -129,14 +129,14 @@ void Session::run()
                 const auto data = m_pty->read();
                 if (!data.has_value()) {
                     // Child exited — emit the final state and stop.
-                    emit();
+                    emitSnapshot();
                     return;
                 }
                 if (!data->empty()) {
                     process(*data);
                 }
             }
-            emit();
+            emitSnapshot();
         }
     } catch (...) {
         // The reader thread must never die with an exception escaping —
@@ -184,7 +184,7 @@ bool Session::drainCommands()
     }
 }
 
-void Session::emit()
+void Session::emitSnapshot()
 {
     // Emit a snapshot when anything visible changed. Rows are frozen
     // objects — the handoff needs no locks and no copies.

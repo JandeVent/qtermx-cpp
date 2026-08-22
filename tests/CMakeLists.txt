@@ -59,3 +59,12 @@ add_executable(gui_input_tests
 target_include_directories(gui_input_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui ../src/gui)
 target_link_libraries(gui_input_tests PRIVATE Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Gui)
 add_test(NAME gui_input_tests COMMAND gui_input_tests)
+
+add_executable(gui_render_tests
+    gui/test_render.cpp
+    ../src/gui/renderer.cpp
+    ../src/utf8_decoder.cpp
+)
+target_include_directories(gui_render_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui ../src/gui ../src)
+target_link_libraries(gui_render_tests PRIVATE Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Gui)
+add_test(NAME gui_render_tests COMMAND gui_render_tests)

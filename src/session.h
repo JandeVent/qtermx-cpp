@@ -133,7 +133,7 @@ public:
 private:
     void run();
     bool drainCommands();
-    void emit();
+    void emitSnapshot();
 
     struct Command {
         enum Kind { kSend, kResize, kScroll, kScrollToBottom, kPalette, kClose } kind;
