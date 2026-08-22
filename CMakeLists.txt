@@ -44,11 +44,13 @@ endif()
 target_link_libraries(qtermx-cpp PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 
 # Qt-free core library (parser, dispatcher, emulator, screen, params,
-# utf8, wcwidth) — headless-testable, zero Qt dependencies.
+# utf8, wcwidth, pty, session) — headless-testable, zero Qt dependencies.
 add_library(qtermx_core STATIC
     src/emulator.cpp
     src/parser.cpp
+    src/pty.cpp
     src/screen.cpp
+    src/session.cpp
     src/utf8_decoder.cpp
     src/wcwidth.cpp
 )

@@ -7,9 +7,12 @@
 // emulator decides what each event means.
 
 #include <cstddef>
+#include <functional>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <vector>
 
 #include "dispatcher.h"
 #include "params.h"
@@ -36,8 +39,12 @@ class Emulator : public Dispatcher {
 public:
     using CsiHandler = void (Emulator::*)(const Params&);
     using EscHandler = void (Emulator::*)();
+    // The reply callback receives OSC query replies (BEL-terminated,
+    // xterm style) — the session wires it to the pty so the child sees
+    // its own terminal's colors.
+    using ReplyCallback = std::function<void(const std::string&)>;
 
-    explicit Emulator(Screen& screen) : m_screen(screen) {}
+    explicit Emulator(Screen& screen, ReplyCallback reply = nullptr);
 
     // CSI dispatch table: (prefix, intermediates, final) → handler. A
     // sequence whose intermediates match no entry falls back to the
@@ -116,12 +123,34 @@ public:
     void decrc();
     void decaln();
 
+    // Replace the default foreground/background reported to OSC 10/11
+    // color queries (hex `#rrggbb` — the `QColor.name(HexRgb)` form the
+    // widget forwards).
+    void setPalette(const std::string& fg, const std::string& bg);
+
+    // OSC 12 — the cursor color (`#rrggbb`), nullopt for the default
+    // inverted block (visible state: snapshots carry it).
+    const std::optional<std::string>& cursorColor() const { return m_cursorColor; }
+
 private:
     // SGR extended colors: returns the number of *additional* params
     // consumed (0 when nothing matched).
     int sgrExtended(const Params& params, int i, void (Screen::*setColor)(int));
 
+    // OSC color dispatch (Phase 5, color queries).
+    void oscColorQuery(const std::vector<std::string>& fields);
+    void oscCursorColor(const std::vector<std::string>& fields);
+    void oscReply(const std::string& payload);
+
     Screen& m_screen;
+    ReplyCallback m_reply;
+    // The colors OSC 10/11 queries report — the themed defaults
+    // (palette.h), replaceable via set_palette.
+    std::string m_defaultFg = "#e8e8e8";
+    std::string m_defaultBg = "#101010";
+    // The 256 palette colors as `#rrggbb` (OSC 4 queries).
+    std::vector<std::string> m_palette;
+    std::optional<std::string> m_cursorColor;
 };
 
 } // namespace qtermx

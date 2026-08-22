@@ -34,6 +34,10 @@ add_executable(core_tests
     core/test_screen_effective_rendition.cpp
     core/test_screen_truecolor.cpp
     core/test_palette.cpp
+    core/test_screen_scrollback.cpp
+    core/test_pty.cpp
+    core/test_selection.cpp
+    core/test_session.cpp
 )
 target_include_directories(core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 target_link_libraries(core_tests PRIVATE qtermx_core)
@@ -47,3 +51,11 @@ add_executable(gui_tests
 )
 target_link_libraries(gui_tests PRIVATE Qt${QT_VERSION_MAJOR}::Test)
 add_test(NAME gui_tests COMMAND gui_tests)
+
+add_executable(gui_input_tests
+    gui/test_input.cpp
+    ../src/gui/input_encoder.cpp
+)
+target_include_directories(gui_input_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui ../src/gui)
+target_link_libraries(gui_input_tests PRIVATE Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Gui)
+add_test(NAME gui_input_tests COMMAND gui_input_tests)

@@ -1,10 +1,15 @@
 #include "emulator.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
 #include <tuple>
 #include <unordered_map>
 
+#include "palette.h"
 #include "screen.h"
+#include "utf8_decoder.h"
 
 namespace qtermx {
 
@@ -43,7 +48,69 @@ int rgbParam(const Params& params, int start)
                rgbComponent(saturate(params.get(start + 2))));
 }
 
+// `#rrggbb` → the xterm reply form `rgb:RRRR/GGGG/BBBB` (16-bit
+// components — each 8-bit value doubled). A malformed color falls back
+// to black rather than raising inside the reader thread.
+std::string oscRgb(const std::string& color)
+{
+    if (color.size() != 7 || color[0] != '#') {
+        return "rgb:0000/0000/0000";
+    }
+    const auto hex = [](char c) -> int {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if (c >= 'a' && c <= 'f') {
+            return c - 'a' + 10;
+        }
+        if (c >= 'A' && c <= 'F') {
+            return c - 'A' + 10;
+        }
+        return -1;
+    };
+    const int r = hex(color[1]) * 16 + hex(color[2]);
+    const int g = hex(color[3]) * 16 + hex(color[4]);
+    const int b = hex(color[5]) * 16 + hex(color[6]);
+    if (r < 0 || g < 0 || b < 0) {
+        return "rgb:0000/0000/0000";
+    }
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "rgb:%04x/%04x/%04x", r * 0x101, g * 0x101, b * 0x101);
+    return buf;
+}
+
+// Split `text` on `;` (the OSC payload field separator).
+std::vector<std::string> splitFields(const std::string& text)
+{
+    std::vector<std::string> fields;
+    size_t start = 0;
+    while (true) {
+        const size_t semi = text.find(';', start);
+        if (semi == std::string::npos) {
+            fields.push_back(text.substr(start));
+            break;
+        }
+        fields.push_back(text.substr(start, semi - start));
+        start = semi + 1;
+    }
+    return fields;
+}
+
 } // namespace
+
+Emulator::Emulator(Screen& screen, ReplyCallback reply)
+    : m_screen(screen)
+    , m_reply(std::move(reply))
+{
+    // The 256 palette colors as `#rrggbb` — the OSC 4 query answers
+    // (palette.h is the single source of truth, shared with the
+    // renderer, so a themed terminal reports its themed colors).
+    m_palette.reserve(256);
+    for (int i = 0; i < 256; ++i) {
+        const auto [r, g, b] = palette::paletteRgb(i);
+        m_palette.push_back(palette::rgbHex(r, g, b));
+    }
+}
 
 // ============================================================================
 // Dispatcher protocol
@@ -180,9 +247,153 @@ void Emulator::designateCharset(std::string designator, std::string charset)
 
 void Emulator::oscDispatch(std::u32string payload)
 {
-    // OSC dispatch lands in Phase 5 (title, hyperlinks, clipboard,
-    // color queries). Parse-and-ignore for now.
-    (void)payload;
+    // OSC dispatch — split on `;`, dispatch on the first field.
+    // Color queries: `4` (palette), `10` (fg), `11` (bg), `12`
+    // (cursor) — the queries TUI apps (opencode, vim, …) send to
+    // detect the terminal's theme and pick their own cursor color.
+    // Set forms (`4;i;spec`, `10;spec`, `11;spec`) parse-and-ignore
+    // for now (palette mutation is a follow-up); `12;spec` and `112`
+    // (reset) apply — the cursor color is visible state. Everything
+    // else stays a no-op until its step.
+    const std::vector<std::string> fields = splitFields(encodeUtf8(payload));
+    if (fields.empty()) {
+        return;
+    }
+    const std::string& command = fields[0];
+    if (command == "4") {
+        oscColorQuery(fields);
+    } else if ((command == "10" || command == "11") && fields.size() >= 2 && fields[1] == "?") {
+        const std::string& color = command == "10" ? m_defaultFg : m_defaultBg;
+        oscReply(command + ";" + oscRgb(color));
+    } else if (command == "12") {
+        oscCursorColor(fields);
+    } else if (command == "112") {
+        // OSC 112 — reset the cursor color to the terminal default.
+        m_cursorColor.reset();
+    }
+}
+
+void Emulator::oscColorQuery(const std::vector<std::string>& fields)
+{
+    // OSC 4 query forms — `4;?` (all 16), `4;i;?` (one index),
+    // `4;i1;?;i2;?` (several): reply each queried palette color. Set
+    // forms carry no `?` — parse-and-ignore.
+    bool hasQuery = false;
+    for (const auto& f : fields) {
+        if (f == "?") {
+            hasQuery = true;
+            break;
+        }
+    }
+    if (!hasQuery) {
+        return;
+    }
+    std::vector<int> indices;
+    for (size_t i = 1; i < fields.size(); ++i) {
+        const std::string& f = fields[i];
+        if (f.empty() || f == "?") {
+            continue;
+        }
+        const bool isDigit = !f.empty() &&
+                             std::all_of(f.begin(), f.end(), [](unsigned char c) {
+                                 return std::isdigit(c) != 0;
+                             });
+        if (isDigit) {
+            indices.push_back(std::atoi(f.c_str()));
+        }
+    }
+    if (indices.empty()) {
+        for (int i = 0; i < 16; ++i) {
+            indices.push_back(i);
+        }
+    }
+    std::string replies;
+    for (const int index : indices) {
+        if (index >= 0 && index < 256) {
+            if (!replies.empty()) {
+                replies += ";";
+            }
+            replies += std::to_string(index) + ";" + oscRgb(m_palette[index]);
+        }
+    }
+    if (!replies.empty()) {
+        oscReply("4;" + replies);
+    }
+}
+
+void Emulator::oscCursorColor(const std::vector<std::string>& fields)
+{
+    // OSC 12 — the cursor color, set or query. Set forms
+    // (`12;#rrggbb`, `12;rgb:rrrr/gggg/bbbb`) replace the color the
+    // renderer paints the cursor block with — apps (opencode, vim) set
+    // their own per-theme caret color, and honoring it keeps the block
+    // visible in light themes (where the default inverted block would
+    // take the cell's white foreground). `12;?` reports the current
+    // color back (xterm style); unset stays silent.
+    if (fields.size() >= 2 && fields[1] == "?") {
+        if (m_cursorColor.has_value()) {
+            oscReply("12;" + oscRgb(*m_cursorColor));
+        }
+        return;
+    }
+    if (fields.size() < 2) {
+        return;
+    }
+    const std::string& spec = fields[1];
+    if (spec.size() == 7 && spec[0] == '#') {
+        m_cursorColor = spec;
+    } else if (spec.rfind("rgb:", 0) == 0) {
+        // rgb:RRRR/GGGG/BBBB — 16-bit components, scaled to 8-bit. Any
+        // other arity (rgb:RRRR/GGGG, …) is malformed — ignore rather
+        // than store an unparsable `#rrggbb`.
+        std::vector<std::string> parts;
+        size_t start = 4;
+        while (true) {
+            const size_t slash = spec.find('/', start);
+            if (slash == std::string::npos) {
+                parts.push_back(spec.substr(start));
+                break;
+            }
+            parts.push_back(spec.substr(start, slash - start));
+            start = slash + 1;
+        }
+        if (parts.size() == 3) {
+            std::string hex;
+            bool ok = true;
+            for (const auto& p : parts) {
+                char* end = nullptr;
+                const long v = std::strtol(p.c_str(), &end, 16);
+                if (end == p.c_str() || *end != '\0') {
+                    ok = false;
+                    break;
+                }
+                char buf[4];
+                std::snprintf(buf, sizeof(buf), "%02x", static_cast<int>((v >> 8) & 0xFF));
+                hex += buf;
+            }
+            if (ok) {
+                m_cursorColor = "#" + hex;
+            }
+        }
+    }
+}
+
+void Emulator::oscReply(const std::string& payload)
+{
+    // Send an OSC reply to the child (BEL-terminated, xterm style); a
+    // missing reply callback (headless tests) silently drops it.
+    if (m_reply) {
+        m_reply("\x1b]" + payload + "\x07");
+    }
+}
+
+void Emulator::setPalette(const std::string& fg, const std::string& bg)
+{
+    // Replace the default foreground/background reported to OSC 10/11
+    // color queries (hex `#rrggbb` — the `QColor.name(HexRgb)` form the
+    // widget forwards).
+    m_defaultFg = fg;
+    m_defaultBg = bg;
 }
 
 // ============================================================================
