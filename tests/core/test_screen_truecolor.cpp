@@ -145,3 +145,26 @@ TEST_CASE(effective_rendition_passes_rgb_through)
     QTERMX_CHECK(cell.data == U"X");
     QTERMX_CHECK(cell.fg == rgb(1, 2, 3) && cell.bg == rgb(4, 5, 6));
 }
+
+// Regression tests for saturate() fix in colon-form RGB components.
+// Huge values (0xFFFFFFFF) must saturate to 255, not wrap negative.
+TEST_CASE(colon_form_rgb_huge_values_saturate_to_255)
+{
+    // 38:2:0xFFFFFFFF:0xFFFFFFFF:0xFFFFFFFF → all clamp to 255
+    Screen& screen = feedTo(U"\x1B[38:2:4294967295:4294967295:4294967295mX");
+    QTERMX_CHECK(screen.line(0).cells[0].fg == rgb(255, 255, 255));
+}
+
+TEST_CASE(colon_form_rgb_huge_r_clamps)
+{
+    // Only R is huge → R clamps to 255, G and B stay as-is
+    Screen& screen = feedTo(U"\x1B[38:2:4294967295:128:64mX");
+    QTERMX_CHECK(screen.line(0).cells[0].fg == rgb(255, 128, 64));
+}
+
+TEST_CASE(semicolon_form_rgb_huge_values_saturate)
+{
+    // 38;2;0xFFFFFFFF;0xFFFFFFFF;0xFFFFFFFF → all clamp to 255
+    Screen& screen = feedTo(U"\x1B[38;2;4294967295;4294967295;4294967295mX");
+    QTERMX_CHECK(screen.line(0).cells[0].fg == rgb(255, 255, 255));
+}

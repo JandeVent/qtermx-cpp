@@ -52,3 +52,37 @@ TEST_CASE(wcwidth_controls_are_minus_one)
     QTERMX_CHECK(qtermx::wcwidth(0x7F) == -1);
     QTERMX_CHECK(qtermx::wcwidth(0x9F) == -1);
 }
+
+// Regression tests for Unicode 17.0 table update (from wcwidth 0.8.2)
+TEST_CASE(wcwidth_unicode17_zero_width_format_chars)
+{
+    // Zero-width format characters added/confirmed in Unicode 17.0
+    QTERMX_CHECK(qtermx::wcwidth(0x200B) == 0); // zero-width space
+    QTERMX_CHECK(qtermx::wcwidth(0x200C) == 0); // zero-width non-joiner
+    QTERMX_CHECK(qtermx::wcwidth(0x200D) == 0); // zero-width joiner
+    QTERMX_CHECK(qtermx::wcwidth(0xFEFF) == 0); // BOM (zero-width)
+    QTERMX_CHECK(qtermx::wcwidth(0x2060) == 0); // word joiner
+    QTERMX_CHECK(qtermx::wcwidth(0x2061) == 0); // function application
+    QTERMX_CHECK(qtermx::wcwidth(0x2062) == 0); // invisible times
+    QTERMX_CHECK(qtermx::wcwidth(0x2063) == 0); // invisible separator
+    QTERMX_CHECK(qtermx::wcwidth(0x2064) == 0); // invisible plus
+}
+
+TEST_CASE(wcwidth_unicode17_wide_emoji)
+{
+    // Emoji and wide characters confirmed in Unicode 17.0
+    QTERMX_CHECK(qtermx::wcwidth(0x1F600) == 2); // 😀 grinning face
+    QTERMX_CHECK(qtermx::wcwidth(0x1F680) == 2); // 🚀 rocket
+    QTERMX_CHECK(qtermx::wcwidth(0x1F308) == 2); // 🌈 rainbow
+    QTERMX_CHECK(qtermx::wcwidth(0x1F4A5) == 2); // 💥 collision
+    QTERMX_CHECK(qtermx::wcwidth(0x1F525) == 2); // 🔥 fire
+}
+
+TEST_CASE(wcwidth_unicode17_historic_scripts)
+{
+    // Historic scripts that are NOT wide (width 1) in Unicode 17.0
+    // Egyptian hieroglyphs (U+13000-U+1342F) are width 1
+    QTERMX_CHECK(qtermx::wcwidth(0x13000) == 1); // Egyptian hieroglyph
+    // Gothic alphabet (U+10330-U+1034F) is width 1
+    QTERMX_CHECK(qtermx::wcwidth(0x10330) == 1); // Gothic letter
+}

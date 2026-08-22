@@ -226,3 +226,37 @@ TEST_CASE(motion_clears_pending_wrap)
     QTERMX_CHECK(screen.cursor.x == 3);
     QTERMX_CHECK(screen.cursor.y == 0);
 }
+
+// Regression tests for saturate() fixes — huge params must not wrap
+// negative and move the cursor the wrong way.
+TEST_CASE(motion_cuu_huge_param_saturates)
+{
+    // CUU with 0xFFFFFFFF (digit overflow) should saturate to INT_MAX
+    // and clamp at region top, not wrap negative.
+    Screen& screen = feedTo(U"\x1B[3;5r\x1B[4B\x1B[999999999A", 6, 4);
+    // CUD 4 from (0,0) → y=4; CUU huge → clamped at region top (2)
+    QTERMX_CHECK(screen.cursor.x == 0);
+    QTERMX_CHECK(screen.cursor.y == 2);
+}
+
+TEST_CASE(motion_cud_huge_param_saturates)
+{
+    // CUD with huge param should saturate and clamp at region bottom
+    Screen& screen = feedTo(U"\x1B[3;5r\x1B[2B\x1B[999999999B", 6, 4);
+    // CUD 2 → y=2 (region top); CUD huge → clamped at region bottom (4)
+    QTERMX_CHECK(screen.cursor.y == 4);
+}
+
+TEST_CASE(motion_cuf_huge_param_saturates)
+{
+    // CUF with huge param should saturate and clamp at last column
+    Screen& screen = feedTo(U"\x1B[999999999C", 2, 4);
+    QTERMX_CHECK(screen.cursor.x == 3); // clamped to columns-1
+}
+
+TEST_CASE(motion_cub_huge_param_saturates)
+{
+    // CUB with huge param should saturate and clamp at column 0
+    Screen& screen = feedTo(U"a\x1B[999999999D", 2, 4);
+    QTERMX_CHECK(screen.cursor.x == 0); // clamped to 0
+}

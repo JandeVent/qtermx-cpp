@@ -37,10 +37,12 @@ std::u32string Utf8Decoder::decode(std::string_view bytes)
         const uint8_t b = static_cast<uint8_t>(bytes[i]);
         if (m_remaining > 0) {
             // The lead's range constraint applies only to the FIRST
-            // continuation byte (m_remaining == 2 for 3-byte leads,
-            // == 3 for 4-byte); later continuations just need 0x80–0xBF.
+            // continuation byte (m_remaining == 3 for 4-byte leads,
+            // == 2 for 3-byte); later continuations just need 0x80–0xBF.
+            const bool isFirstCont = (m_remaining == 3)
+                                     || (m_remaining == 2 && m_lead < 0xF0);
             if ((b & 0xC0) != 0x80 ||
-                (m_remaining >= 2 && !continuationOk(m_lead, b))) {
+                (isFirstCont && !continuationOk(m_lead, b))) {
                 // Invalid continuation: emit U+FFFD for the pending
                 // sequence and reprocess this byte fresh (CPython
                 // resyncs at the offending byte).

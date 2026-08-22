@@ -240,6 +240,12 @@ Pty::Pty(std::vector<std::string> command, std::vector<std::pair<std::string, st
     setWindowSizeFd(rows, cols, slaveFd);
 
     const pid_t pid = fork();
+    if (pid == -1) {
+        std::perror("fork");
+        ::close(masterFd);
+        ::close(slaveFd);
+        std::abort();
+    }
     if (pid == 0) {
         // Child. Order matters (libptyqt configChildProcess): dup the
         // slave onto 0/1/2 FIRST, then setsid, then acquire the pty as

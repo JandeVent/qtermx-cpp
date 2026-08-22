@@ -512,32 +512,32 @@ void Emulator::decstbm(const Params& params)
 
 void Emulator::cuu(const Params& params)
 {
-    m_screen.cursorUp(params.get(0) ? params.get(0) : 1);
+    m_screen.cursorUp(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::cud(const Params& params)
 {
-    m_screen.cursorDown(params.get(0) ? params.get(0) : 1);
+    m_screen.cursorDown(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::cuf(const Params& params)
 {
-    m_screen.cursorForward(params.get(0) ? params.get(0) : 1);
+    m_screen.cursorForward(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::cub(const Params& params)
 {
-    m_screen.cursorBackward(params.get(0) ? params.get(0) : 1);
+    m_screen.cursorBackward(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::cnl(const Params& params)
 {
-    m_screen.cursorNextLine(params.get(0) ? params.get(0) : 1);
+    m_screen.cursorNextLine(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::cpl(const Params& params)
 {
-    m_screen.cursorPrecedingLine(params.get(0) ? params.get(0) : 1);
+    m_screen.cursorPrecedingLine(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::cup(const Params& params)
@@ -584,37 +584,37 @@ void Emulator::el(const Params& params)
 
 void Emulator::ech(const Params& params)
 {
-    m_screen.eraseChars(params.get(0) ? params.get(0) : 1);
+    m_screen.eraseChars(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::ich(const Params& params)
 {
-    m_screen.insertChars(params.get(0) ? params.get(0) : 1);
+    m_screen.insertChars(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::il(const Params& params)
 {
-    m_screen.insertLines(params.get(0) ? params.get(0) : 1);
+    m_screen.insertLines(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::dl(const Params& params)
 {
-    m_screen.deleteLines(params.get(0) ? params.get(0) : 1);
+    m_screen.deleteLines(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::dch(const Params& params)
 {
-    m_screen.deleteChars(params.get(0) ? params.get(0) : 1);
+    m_screen.deleteChars(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::su(const Params& params)
 {
-    m_screen.scrollUp(params.get(0) ? params.get(0) : 1);
+    m_screen.scrollUp(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::sd(const Params& params)
 {
-    m_screen.scrollDown(params.get(0) ? params.get(0) : 1);
+    m_screen.scrollDown(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::tbc(const Params& params)
@@ -624,12 +624,12 @@ void Emulator::tbc(const Params& params)
 
 void Emulator::cht(const Params& params)
 {
-    m_screen.tabForward(params.get(0) ? params.get(0) : 1);
+    m_screen.tabForward(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::cbt(const Params& params)
 {
-    m_screen.tabBackward(params.get(0) ? params.get(0) : 1);
+    m_screen.tabBackward(saturate(params.get(0) ? params.get(0) : 1));
 }
 
 void Emulator::save(const Params& params)
@@ -740,10 +740,10 @@ int Emulator::sgrExtended(const Params& params, int i, void (Screen::*setColor)(
     if (!sub.empty()) {
         // Colon form: everything lives in this group's sub-params.
         if (sub[0] == 2 && (sub.size() == 4 || sub.size() == 5)) {
-            const int r = sub.size() == 4 ? sub[1] : sub[2];
-            const int g = sub.size() == 4 ? sub[2] : sub[3];
-            const int b = sub.size() == 4 ? sub[3] : sub[4];
-            (m_screen.*setColor)(rgb(rgbComponent(r), rgbComponent(g), rgbComponent(b)));
+            const int r = rgbComponent(saturate(sub.size() == 4 ? sub[1] : sub[2]));
+            const int g = rgbComponent(saturate(sub.size() == 4 ? sub[2] : sub[3]));
+            const int b = rgbComponent(saturate(sub.size() == 4 ? sub[3] : sub[4]));
+            (m_screen.*setColor)(rgb(r, g, b));
         } else if (sub[0] == 5 && sub.size() == 2 && sub[1] >= 0 && sub[1] <= 255) {
             (m_screen.*setColor)(saturate(sub[1]));
         }

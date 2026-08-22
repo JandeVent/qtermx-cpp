@@ -6,6 +6,8 @@
 #include <vector>
 
 #include <QApplication>
+#include <QFont>
+#include <QFontDatabase>
 #include <QSize>
 
 #include "pty.h"
@@ -25,6 +27,16 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle("qtermx-cpp");
     resize(m_terminal->sizeHint() + QSize(0, 32));
     connect(qApp, &QApplication::aboutToQuit, this, [this] { m_session->close(); });
+
+    // Set monospace font like pyqtermx: platform's native monospace,
+    // falling back to Menlo (macOS) or DejaVu Sans Mono (Linux).
+    QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    if (font.family().isEmpty()) {
+        font = QFont("Menlo", 12);
+    } else {
+        font.setPixelSize(12);
+    }
+    m_terminal->setFont(font);
 }
 
 MainWindow::~MainWindow() = default;
