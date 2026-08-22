@@ -173,6 +173,7 @@ void TerminalWidget::mirrorFlags(const Snapshot& snapshot)
     m_mouse1002 = snapshot.mouse1002;
     m_mouse1003 = snapshot.mouse1003;
     m_mouse1006 = snapshot.mouse1006;
+    m_focusReport = snapshot.focusReport;
     m_altScreen = snapshot.altScreen;
     m_scrollbackLen = snapshot.scrollbackLen;
     m_offset = snapshot.viewportOffset;
@@ -757,6 +758,10 @@ void TerminalWidget::focusInEvent(QFocusEvent* event)
     m_cursorStyle = kCursorBlock;
     repaintCursor();
     m_cursorBlinkTimer->start();
+    // Focus reporting (?1004): the app asked for focus in/out events.
+    if (m_focusReport && m_session != nullptr) {
+        m_session->sendData("\x1b[I");
+    }
 }
 
 void TerminalWidget::focusOutEvent(QFocusEvent* event)
@@ -769,6 +774,10 @@ void TerminalWidget::focusOutEvent(QFocusEvent* event)
     m_cursorBlink = true;
     m_cursorStyle = kCursorOutline;
     repaintCursor();
+    // Focus reporting (?1004): the app asked for focus in/out events.
+    if (m_focusReport && m_session != nullptr) {
+        m_session->sendData("\x1b[O");
+    }
 }
 
 void TerminalWidget::resizeEvent(QResizeEvent* event)

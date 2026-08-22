@@ -133,6 +133,7 @@ public:
     bool decCkm() const { return m_decCkm; }
     bool bracketedPaste() const { return m_bracketedPaste; }
     bool mouseEnabled() const { return mouseEnabledImpl(); }
+    bool focusReport() const { return m_focusReport; }
     bool altScreen() const { return m_altScreen; }
     int scrollbackLen() const { return m_scrollbackLen; }
     int viewportOffset() const { return m_offset; }
@@ -244,6 +245,7 @@ private:
     bool m_mouse1002 = false;
     bool m_mouse1003 = false;
     bool m_mouse1006 = false;
+    bool m_focusReport = false; // ?1004 — focus in/out events to the app
     bool m_altScreen = false;
     // Sub-notch wheel deltas (trackpad) banked for the alt-screen
     // page-key path — one full 120° notch pages the app once.

@@ -73,6 +73,12 @@ TEST_CASE(dispatch_csi_final_mapping_uses_bare_final_fallback)
         (void)handler;
         const auto& [prefix, intermediates, final] = key;
         if (!intermediates.empty()) {
+            // DECRPM (`? $ p`) is an exact-match entry — the bare-final
+            // fallback for "p" is nothing (xterm.js registers it by
+            // exact key, like the ESC table).
+            if (prefix == "?" && intermediates == "$" && final == "p") {
+                continue;
+            }
             QTERMX_CHECK(Emulator::lookupCsi("", prefix, final) != nullptr);
         }
     }

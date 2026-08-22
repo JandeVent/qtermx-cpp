@@ -692,6 +692,24 @@ private slots:
         QVERIFY(waitUntil([&] { return m_widget->cursorBlinkTimerActive(); }));
     }
 
+    void focusReportingSendsFocusEvents()
+    {
+        // ?1004: the app asked for focus in/out events — the widget
+        // sends ESC [ I on focus-in and ESC [ O on focus-out.
+        m_widget->show();
+        m_fake->output("\x1b[?1004h");
+        QVERIFY(waitUntil([&] { return m_widget->focusReport(); }));
+        // The widget has focus after show — the first focus-out lands
+        // the ?1004 report (wait for it before clearing).
+        m_widget->clearFocus();
+        QVERIFY(waitUntil([&] { return m_fake->m_sent == "\x1b[O"; }));
+        m_fake->m_sent.clear();
+        m_widget->setFocus();
+        QVERIFY(waitUntil([&] { return m_fake->m_sent == "\x1b[I"; }));
+        m_widget->clearFocus();
+        QVERIFY(waitUntil([&] { return m_fake->m_sent == "\x1b[I\x1b[O"; }));
+    }
+
 private:
     FakePty* m_fake = nullptr;
     Session* m_session = nullptr;

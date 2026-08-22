@@ -38,6 +38,7 @@ add_executable(core_tests
     core/test_pty.cpp
     core/test_selection.cpp
     core/test_session.cpp
+    core/test_emulator_osc_color.cpp
 )
 target_include_directories(core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core)
 target_link_libraries(core_tests PRIVATE qtermx_core)

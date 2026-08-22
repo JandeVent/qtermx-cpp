@@ -203,13 +203,15 @@ void Session::emitSnapshot()
     const bool mouse1002 = screen.mode(1002, true);
     const bool mouse1003 = screen.mode(1003, true);
     const bool mouse1006 = screen.mode(1006, true);
+    const bool focusReport = screen.mode(1004, true);
     const bool reverse = screen.mode(5, true); // DECSCNM — a visible mode
     const bool cursorVisible = screen.mode(kDectcem, true); // DECTCEM — a visible mode
     const std::optional<std::string>& cursorColor = m_emulator.cursorColor();
     const bool full = m_full || offset != m_lastOffset || reverse != m_lastReverse;
     const bool modeChanged = decCkm != m_lastDecCkm || bracketedPaste != m_lastBracketedPaste ||
                              mouse1000 != m_lastMouse1000 || mouse1002 != m_lastMouse1002 ||
-                             mouse1003 != m_lastMouse1003 || mouse1006 != m_lastMouse1006;
+                             mouse1003 != m_lastMouse1003 || mouse1006 != m_lastMouse1006 ||
+                             focusReport != m_lastFocusReport;
     if (cursorRow != m_lastCursorRow || cursorCol != m_lastCursorCol) {
         // A cursor move repaints its old and new rows.
         dirty.insert(m_lastCursorRow);
@@ -268,6 +270,7 @@ void Session::emitSnapshot()
     snap.mouse1002 = mouse1002;
     snap.mouse1003 = mouse1003;
     snap.mouse1006 = mouse1006;
+    snap.focusReport = focusReport;
     snap.altScreen = screen.altScreen();
     snap.reverseVideo = reverse;
     snap.full = full;
@@ -287,6 +290,7 @@ void Session::emitSnapshot()
     m_lastMouse1002 = mouse1002;
     m_lastMouse1003 = mouse1003;
     m_lastMouse1006 = mouse1006;
+    m_lastFocusReport = focusReport;
     m_lastReverse = reverse;
     m_lastCursorVisible = cursorVisible;
     m_lastCursorColor = cursorColor;

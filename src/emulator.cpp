@@ -187,6 +187,10 @@ const std::unordered_map<std::tuple<std::string, std::string, std::string>,
         {{"", "", "Z"}, &Emulator::cbt},      // CBT — cursor backward tabulation
         {{"", "", "s"}, &Emulator::save},     // CSI s — save cursor (DECSC alias)
         {{"", "", "u"}, &Emulator::restore},  // CSI u — restore cursor
+        // Phase 5 — dialogue: the terminal answers the child's queries.
+        {{"", "", "c"}, &Emulator::da1},      // DA1 — device attributes
+        {{"", "", "n"}, &Emulator::dsr},      // DSR — device status report
+        {{"?", "$", "p"}, &Emulator::decrpm}, // DECRPM — DEC report mode
 };
 
 const std::unordered_map<std::tuple<std::string, std::string>, Emulator::EscHandler,
@@ -394,6 +398,49 @@ void Emulator::setPalette(const std::string& fg, const std::string& bg)
     // widget forwards).
     m_defaultFg = fg;
     m_defaultBg = bg;
+}
+
+// ============================================================================
+// Phase 5 — dialogue: the terminal answers the child's queries
+// ============================================================================
+
+void Emulator::da1(const Params& params)
+{
+    // DA1 — device attributes: report VT100 with advanced video
+    // (xterm's `ESC [ ? 1 ; 2 c`). Terminfo-driven apps hang without
+    // this.
+    (void)params;
+    sendReply("\x1b[?1;2c");
+}
+
+void Emulator::dsr(const Params& params)
+{
+    // DSR — device status report: `6` asks for the cursor position;
+    // reply `ESC [ row ; col R` (1-based). Anything else is a no-op.
+    if (params.get(0) == 6) {
+        sendReply("\x1b[" + std::to_string(m_screen.cursor.y + 1) + ";" +
+                  std::to_string(m_screen.cursor.x + 1) + "R");
+    }
+}
+
+void Emulator::decrpm(const Params& params)
+{
+    // DECRPM — DEC report mode: reply `ESC [ ? Ps ; value $ y` with
+    // value 1 (set) or 2 (reset). The mode registry answers; unknown
+    // modes report 2 (reset — the default state).
+    const int mode = params.get(0);
+    const bool set = m_screen.mode(mode, true);
+    sendReply("\x1b[?" + std::to_string(mode) + ";" + (set ? "1" : "2") + "$y");
+}
+
+void Emulator::sendReply(const std::string& payload)
+{
+    // Send a raw reply to the child (DA1/DSR/DECRPM — CSI sequences,
+    // not OSC); a missing reply callback (headless tests) silently
+    // drops it.
+    if (m_reply) {
+        m_reply(payload);
+    }
 }
 
 // ============================================================================

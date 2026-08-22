@@ -70,6 +70,7 @@ struct Snapshot {
     bool mouse1002 = false;
     bool mouse1003 = false;
     bool mouse1006 = false;
+    bool focusReport = false; // ?1004 — focus in/out events to the app
     bool altScreen = false;
     bool full = false;
     bool contentChanged = false;
@@ -167,6 +168,7 @@ private:
     bool m_lastMouse1002 = false;
     bool m_lastMouse1003 = false;
     bool m_lastMouse1006 = false;
+    bool m_lastFocusReport = false;
     bool m_lastReverse = false;
     bool m_lastCursorVisible = true;
     std::optional<std::string> m_lastCursorColor;
