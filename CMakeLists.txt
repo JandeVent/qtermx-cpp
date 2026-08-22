@@ -16,6 +16,9 @@ set(PROJECT_SOURCES
         main.cpp
         mainwindow.cpp
         mainwindow.h
+        src/gui/input_encoder.cpp
+        src/gui/renderer.cpp
+        src/gui/terminal_widget.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -41,7 +44,8 @@ else()
     endif()
 endif()
 
-target_link_libraries(qtermx-cpp PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+target_link_libraries(qtermx-cpp PRIVATE Qt${QT_VERSION_MAJOR}::Widgets qtermx_core)
+target_include_directories(qtermx-cpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src/gui)
 
 # Qt-free core library (parser, dispatcher, emulator, screen, params,
 # utf8, wcwidth, pty, session) — headless-testable, zero Qt dependencies.

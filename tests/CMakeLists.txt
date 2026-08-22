@@ -68,3 +68,23 @@ add_executable(gui_render_tests
 target_include_directories(gui_render_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui ../src/gui ../src)
 target_link_libraries(gui_render_tests PRIVATE Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Gui)
 add_test(NAME gui_render_tests COMMAND gui_render_tests)
+
+add_executable(gui_widget_tests
+    gui/test_widget.cpp
+    ../src/gui/terminal_widget.cpp
+    ../src/gui/input_encoder.cpp
+    ../src/gui/renderer.cpp
+    ../src/session.cpp
+    ../src/pty.cpp
+    ../src/screen.cpp
+    ../src/emulator.cpp
+    ../src/parser.cpp
+    ../src/utf8_decoder.cpp
+    ../src/wcwidth.cpp
+)
+target_include_directories(gui_widget_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui ../src/gui ../src)
+target_link_libraries(gui_widget_tests PRIVATE Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Widgets)
+add_test(NAME gui_widget_tests COMMAND gui_widget_tests)
+# Offscreen: the Python oracle's widget tests run offscreen too — the
+# backing image is dpr-scaled, and the assertions assume dpr == 1.
+set_tests_properties(gui_widget_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
