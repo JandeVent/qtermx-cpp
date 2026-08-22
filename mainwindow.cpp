@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <QApplication>
+#include <QDir>
 #include <QFont>
 #include <QFontDatabase>
 #include <QSize>
@@ -19,8 +20,9 @@ MainWindow::MainWindow(QWidget *parent)
 {
     const char *shell = std::getenv("SHELL");
     m_pty = std::make_unique<qtermx::Pty>(
-        std::vector<std::string>{shell != nullptr ? shell : "/bin/zsh"},
-        std::vector<std::pair<std::string, std::string>>{}, "", 24, 80);
+        std::vector<std::string>{shell != nullptr ? shell : "/bin/zsh", "-l"},
+        std::vector<std::pair<std::string, std::string>>{},
+        QDir::homePath().toStdString(), 24, 80);
     m_session = std::make_unique<qtermx::Session>(m_pty.get(), 24, 80);
     m_terminal = new qtermx::gui::TerminalWidget(m_session.get(), this);
     setCentralWidget(m_terminal);

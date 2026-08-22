@@ -219,6 +219,10 @@ Pty::Pty(std::vector<std::string> command, std::vector<std::pair<std::string, st
     if (command.empty()) {
         const char* shell = std::getenv("SHELL");
         command = {shell != nullptr ? shell : "/bin/sh"};
+        // Launch as login shell (-l) so the user's profile (~/.zshrc,
+        // ~/.bash_profile, etc.) is sourced. Without this, a GUI app
+        // (Finder/Dock launch) inherits only launchd's minimal PATH.
+        command.insert(command.begin() + 1, "-l");
     }
 
     // The child always sees a compatible TERM — the parent's value is
