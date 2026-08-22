@@ -46,9 +46,9 @@ TerminalWidget::TerminalWidget(Session* session, QWidget* parent)
     // No background erase: paintEvent fills everything itself.
     setAttribute(Qt::WA_OpaquePaintEvent);
 
-    m_scrollbarStyle = new MinHandleStyle();
+    m_scrollbarStyle = std::make_unique<MinHandleStyle>();
     m_scrollbar = new QScrollBar(Qt::Vertical, this);
-    m_scrollbar->setStyle(m_scrollbarStyle);
+    m_scrollbar->setStyle(m_scrollbarStyle.get());
     connect(m_scrollbar, &QScrollBar::valueChanged, this, &TerminalWidget::onScrollbar);
     m_scrollbar->hide();
 
@@ -77,8 +77,6 @@ TerminalWidget::~TerminalWidget()
     if (m_session != nullptr) {
         m_session->setSnapshotCallback(nullptr);
     }
-    delete m_viewportRows;
-    delete m_scrollbarStyle;
 }
 
 void TerminalWidget::setSession(Session* session)
@@ -150,13 +148,12 @@ void TerminalWidget::applySnapshot(const Snapshot& snapshot)
         clearSelection(); // the text under it changed (scroll rule)
     }
     m_lastSnapshot = snapshot;
-    std::vector<Row>* merged = mergeViewport(snapshot, m_viewportRows);
-    if (merged != m_viewportRows) {
-        delete m_viewportRows;
-        m_viewportRows = merged;
+    std::unique_ptr<std::vector<Row>> merged = mergeViewport(snapshot, m_viewportRows.get());
+    if (merged != nullptr) {
+        m_viewportRows = std::move(merged);
     }
     const std::vector<int>* rowIndices = snapshot.full ? nullptr : &snapshot.dirtyRows;
-    m_renderer.render(m_image, snapshot, m_viewportRows, rowIndices,
+    m_renderer.render(m_image, snapshot, m_viewportRows.get(), rowIndices,
                       m_selection.has_value() ? &*m_selection : nullptr, std::nullopt,
                       m_cursorStyle);
     mirrorFlags(snapshot);
@@ -290,7 +287,7 @@ void TerminalWidget::rerenderFull()
     // would paint only its dirty rows into the image, blanking every
     // other row.
     if (m_lastSnapshot.has_value()) {
-        m_renderer.render(m_image, *m_lastSnapshot, m_viewportRows, nullptr,
+        m_renderer.render(m_image, *m_lastSnapshot, m_viewportRows.get(), nullptr,
                           m_selection.has_value() ? &*m_selection : nullptr, m_cursorBlink,
                           m_cursorStyle);
     }
@@ -321,7 +318,7 @@ void TerminalWidget::repaintCursor()
         return;
     }
     const std::vector<int> rowIndices = {row};
-    m_renderer.render(m_image, *m_lastSnapshot, m_viewportRows, &rowIndices,
+    m_renderer.render(m_image, *m_lastSnapshot, m_viewportRows.get(), &rowIndices,
                       m_selection.has_value() ? &*m_selection : nullptr, m_cursorBlink,
                       m_cursorStyle);
     update(QRect(0, static_cast<int>(row * m_renderer.cellH()),

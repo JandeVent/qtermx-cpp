@@ -9,10 +9,11 @@
 namespace qtermx {
 
 Session::Session(PtyLike* pty, int lines, int columns, int scrollbackLimit,
-                 SnapshotCallback callback)
+                 int snapshotLimit, SnapshotCallback callback)
     : m_pty(pty)
     , m_lines(lines)
     , m_columns(columns)
+    , m_snapshotLimit(snapshotLimit)
     , m_screen(lines, columns, scrollbackLimit)
     , m_emulator(m_screen, [this](const std::string& text) { m_pty->sendData(text); })
     , m_parser(&m_emulator)
@@ -289,6 +290,11 @@ void Session::emitSnapshot()
     snap.cursorVisible = cursorVisible;
     snap.cursorColor = cursorColor;
     m_snapshots.push_back(snap);
+    // Trim old snapshots to prevent unbounded memory growth.
+    if (m_snapshotLimit > 0 && static_cast<int>(m_snapshots.size()) > m_snapshotLimit) {
+        m_snapshots.erase(m_snapshots.begin(),
+                          m_snapshots.begin() + (m_snapshots.size() - m_snapshotLimit));
+    }
     if (m_callback) {
         m_callback(snap);
     }

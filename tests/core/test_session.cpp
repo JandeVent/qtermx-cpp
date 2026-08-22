@@ -363,7 +363,7 @@ TEST_CASE(session_osc12_cursor_color_flows_into_snapshots)
     // repaints the cursor row without touching text (selection survives).
     FakePty fake;
     std::vector<Snapshot> snapshots;
-    Session session(&fake, 24, 80, 1000, [&](const Snapshot& s) { snapshots.push_back(s); });
+    Session session(&fake, 24, 80, 1000, 1000, [&](const Snapshot& s) { snapshots.push_back(s); });
     session.start();
     fake.output("x\x1b]12;#1a1a1a\x07");
     QTERMX_CHECK(waitFor([&] {

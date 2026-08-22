@@ -87,7 +87,7 @@ public:
     using SnapshotCallback = std::function<void(const Snapshot&)>;
 
     Session(PtyLike* pty, int lines = 24, int columns = 80, int scrollbackLimit = 1000,
-            SnapshotCallback callback = nullptr);
+            int snapshotLimit = 1000, SnapshotCallback callback = nullptr);
     ~Session();
 
     Session(const Session&) = delete;
@@ -147,6 +147,7 @@ private:
     PtyLike* m_pty;
     int m_lines;
     int m_columns;
+    int m_snapshotLimit;
     Screen m_screen;
     Emulator m_emulator;
     Parser m_parser;

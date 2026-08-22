@@ -18,6 +18,7 @@
 // full repaint re-renders the backing from the merged viewport instead
 // of blitting it: the frame heals itself from the last snapshot.
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -65,10 +66,11 @@ inline constexpr int kScrollbarMinHandlePx = 40;
 // snapshots replace everything; incremental snapshots overwrite only
 // their dirty rows. nullptr until the first `full` snapshot arrives —
 // the session always leads with one.
-inline std::vector<Row>* mergeViewport(const Snapshot& snapshot, std::vector<Row>* prev)
+inline std::unique_ptr<std::vector<Row>> mergeViewport(const Snapshot& snapshot,
+                                                       std::vector<Row>* prev)
 {
     if (snapshot.full) {
-        return new std::vector<Row>(snapshot.rows);
+        return std::make_unique<std::vector<Row>>(snapshot.rows);
     }
     if (prev == nullptr) {
         return nullptr;
@@ -79,7 +81,8 @@ inline std::vector<Row>* mergeViewport(const Snapshot& snapshot, std::vector<Row
             (*prev)[k] = snapshot.rows[i];
         }
     }
-    return prev;
+    // Return nullptr to indicate the existing pointer is still valid.
+    return nullptr;
 }
 
 // Enforce a minimum scrollbar handle length, native look intact.
@@ -139,7 +142,7 @@ public:
     int viewportOffset() const { return m_offset; }
     bool hasSelection() const { return m_selection.has_value(); }
     const std::optional<Selection>& selection() const { return m_selection; }
-    const std::vector<Row>* viewportRows() const { return m_viewportRows; }
+    const std::vector<Row>* viewportRows() const { return m_viewportRows.get(); }
     bool cursorBlinkTimerActive() const { return m_cursorBlinkTimer->isActive(); }
     bool scrollbarVisible() const { return m_scrollbar->isVisible(); }
     int scrollbarWidth() const { return m_scrollbar->sizeHint().width(); }
@@ -217,7 +220,7 @@ private:
     int m_lines = kDefaultLines;
     int m_columns = kDefaultColumns;
     std::optional<Snapshot> m_lastSnapshot;
-    std::vector<Row>* m_viewportRows = nullptr; // merged viewport (owned)
+    std::unique_ptr<std::vector<Row>> m_viewportRows; // merged viewport (owned)
 
     // Mouse: the selection (viewport coordinates) and the press/drag
     // state. The selection is a *local* action — the terminal renders
@@ -232,7 +235,7 @@ private:
     qint64 m_lastClickTimeMs = 0;
 
     QScrollBar* m_scrollbar = nullptr;
-    MinHandleStyle* m_scrollbarStyle = nullptr;
+    std::unique_ptr<MinHandleStyle> m_scrollbarStyle;
     QTimer* m_resizeTimer = nullptr;
     QTimer* m_cursorBlinkTimer = nullptr;
     bool m_cursorBlink = true;

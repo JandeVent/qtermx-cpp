@@ -620,7 +620,7 @@ private slots:
         Snapshot snap;
         snap.full = true;
         snap.rows = rows;
-        std::vector<Row>* merged = mergeViewport(snap, nullptr);
+        auto merged = mergeViewport(snap, nullptr);
         QVERIFY(merged != nullptr);
         QCOMPARE(merged->size(), size_t(3));
         QCOMPARE((*merged)[0].cells[0].data, std::u32string(U"a"));
@@ -634,12 +634,10 @@ private slots:
         rows2.push_back((*merged)[1]);
         rows2.push_back((*merged)[2]);
         snap2.rows = rows2;
-        std::vector<Row>* merged2 = mergeViewport(snap2, merged);
-        QVERIFY(merged2 != merged); // replaced, not mutated
+        auto merged2 = mergeViewport(snap2, merged.get());
+        QVERIFY(merged2 != nullptr); // replaced, not mutated
         QCOMPARE((*merged2)[0].cells[0].data, std::u32string(U"x"));
         QCOMPARE((*merged2)[1].cells[0].data, std::u32string(U"a"));
-        delete merged;
-        delete merged2;
     }
 
     void mergePartialOverwritesOnlyDirtyRows()
@@ -653,7 +651,7 @@ private slots:
         Snapshot full;
         full.full = true;
         full.rows = rows;
-        std::vector<Row>* merged = mergeViewport(full, nullptr);
+        auto merged = mergeViewport(full, nullptr);
         QVERIFY(merged != nullptr);
         // Rewrite only row 1 — the incremental snapshot carries one row.
         Snapshot partial;
@@ -661,12 +659,11 @@ private slots:
         Row row1;
         row1.cells.push_back(Cell{U"z"});
         partial.rows = {row1};
-        std::vector<Row>* merged2 = mergeViewport(partial, merged);
-        QCOMPARE(merged2, merged);
-        QCOMPARE((*merged2)[0].cells[0].data, std::u32string(U"a"));
-        QCOMPARE((*merged2)[1].cells[0].data, std::u32string(U"z"));
-        QCOMPARE((*merged2)[2].cells[0].data, std::u32string(U"e"));
-        delete merged;
+        auto merged2 = mergeViewport(partial, merged.get());
+        QCOMPARE(merged2.get(), nullptr); // same pointer, no new allocation
+        QCOMPARE((*merged)[0].cells[0].data, std::u32string(U"a"));
+        QCOMPARE((*merged)[1].cells[0].data, std::u32string(U"z"));
+        QCOMPARE((*merged)[2].cells[0].data, std::u32string(U"e"));
     }
 
     void mergePartialBeforeFirstFullStaysNull()
