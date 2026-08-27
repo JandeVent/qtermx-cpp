@@ -179,6 +179,9 @@ std::optional<QByteArray> InputEncoder::encodeKey(const QKeyEvent& event,
     }
 
     if (qkey == Qt::Key_Return || qkey == Qt::Key_Enter) {
+        if (shift) {
+            return QByteArray("\n");
+        }
         return alt ? QByteArray("\x1b\r") : QByteArray("\r");
     }
     if (qkey == Qt::Key_Tab || qkey == Qt::Key_Backtab) {
@@ -203,7 +206,9 @@ std::optional<QByteArray> InputEncoder::encodeKey(const QKeyEvent& event,
         if (n == 1) {
             return QByteArray("\x1b[") + *final;
         }
-        return QByteArray("\x1b[1;") + QByteArray::number(n) + *final;
+        // xterm format: CSI key_code;modifier ~  (not CSI 1;modifier key_code~)
+        QByteArray keyCode = final->left(final->size() - 1);  // drop trailing ~
+        return QByteArray("\x1b[") + keyCode + ';' + QByteArray::number(n) + '~';
     }
     if (const std::optional<QByteArray> final = fkeyFinal(qkey)) {
         const int n = modifierCode(shift, alt, ctrl);

@@ -111,6 +111,7 @@ private slots:
 
     // -- Editing keys --
     void enterIsCarriageReturn();
+    void shiftEnterIsLineFeed();
     void tabAndBackspace();
 
     // -- Modifier encodings --
@@ -201,6 +202,12 @@ void TestInput::enterIsCarriageReturn()
     checkEncode(key(Qt::Key_Enter, QStringLiteral("\r")), QByteArray("\r"));
 }
 
+void TestInput::shiftEnterIsLineFeed()
+{
+    checkEncode(key(Qt::Key_Return, QStringLiteral("\r"), kShift), QByteArray("\n"));
+    checkEncode(key(Qt::Key_Enter, QStringLiteral("\r"), kShift), QByteArray("\n"));
+}
+
 void TestInput::tabAndBackspace()
 {
     checkEncode(key(Qt::Key_Tab, QStringLiteral("\t")), QByteArray("\t"));
@@ -274,8 +281,8 @@ void TestInput::insertAndDelete()
 {
     checkEncode(key(Qt::Key_Insert, QString()), QByteArray("\x1b[2~"));
     checkEncode(key(Qt::Key_Delete, QString()), QByteArray("\x1b[3~"));
-    checkEncode(key(Qt::Key_Delete, QString(), ctrl()), QByteArray("\x1b[1;53~"));
-    checkEncode(key(Qt::Key_Insert, QString(), kAlt), QByteArray("\x1b[1;32~"));
+    checkEncode(key(Qt::Key_Delete, QString(), ctrl()), QByteArray("\x1b[3;5~"));
+    checkEncode(key(Qt::Key_Insert, QString(), kAlt), QByteArray("\x1b[2;3~"));
 }
 
 void TestInput::functionKeys()
