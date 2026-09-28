@@ -13,12 +13,13 @@
 // mixed halfway toward bg), underline, strike, overline, hidden (no
 // glyph), italic (font flag), and DECSCNM ?5 (whole-screen reverse).
 //
-// Box-drawing (U+2500–257F), block characters (U+2580–259F), and
-// geometric shapes are drawn as vectors — painter drawLine/fillRect/
-// drawEllipse/drawPolygon from the `kVectorGlyphs` primitive table —
-// not through the font: box and block glyphs join seamlessly across
-// cells, and small shapes stay crisp instead of antialiasing to a
-// speck. Braille stays in the font. SGR blink is parsed but not yet
+// Block characters (U+2580–259F) and geometric shapes are drawn as
+// vectors — painter drawLine/fillRect/drawEllipse/drawPolygon from the
+// `kVectorGlyphs` primitive table — not through the font: block glyphs
+// join seamlessly across cells, and small shapes stay crisp instead of
+// antialiasing to a speck. Box-drawing lines and corners (U+2500–257F)
+// are left to the font — their glyphs are designed to join across
+// cells. Braille stays in the font. SGR blink is parsed but not yet
 // painted; the *cursor* blink is the widget's job — `paint` takes a
 // `cursorVisible` override the widget's timer drives.
 
@@ -64,12 +65,11 @@ inline constexpr const char* kCursorOutline = "outline";
 // (cell-relative floats; `u` is the cell's smaller side):
 // - kFill:  (fx, fy, fw, fh) in a..d, role 0 = fg, 1 = bg
 // - kLine:  (x1, y1, x2, y2) in a..d — a stroke (fg), endpoints inclusive
-// - kArc:   (cx, cy, r, a0, a1) in a..e — radius r × u, angles in degrees
 // - kSquare/kCircle: (size, cx, cy) in a..c, role 0 = fill, 1 = ring
 // - kPoly:  (size, cx, cy) in a..c, role 0 = fill, 1 = ring, then vertex
 //   pairs (vx, vy) in d..j — coordinates in the size × u box
 struct Primitive {
-    enum Kind { kFill, kLine, kArc, kSquare, kCircle, kPoly } kind;
+    enum Kind { kFill, kLine, kSquare, kCircle, kPoly } kind;
     float a = 0, b = 0, c = 0, d = 0, e = 0, f = 0, g = 0, h = 0, i = 0, j = 0;
     int role = 0;
 };
@@ -117,19 +117,6 @@ inline Primitive linePrim(float x1, float y1, float x2, float y2)
     return p;
 }
 
-// An arc primitive (fg), radius `r × u`, angles in degrees.
-inline Primitive arcPrim(float cx, float cy, float r, float a0, float a1)
-{
-    Primitive p;
-    p.kind = Primitive::kArc;
-    p.a = cx;
-    p.b = cy;
-    p.c = r;
-    p.d = a0;
-    p.e = a1;
-    return p;
-}
-
 // A centered shape primitive — `kind` kSquare or kCircle, side/diameter
 // `size × u`, offset by `cx × u` / `cy × u`; `style` 0 = fill, 1 = ring.
 inline Primitive shapePrim(Primitive::Kind kind, float size, float cx, float cy, int style)
@@ -145,35 +132,15 @@ inline Primitive shapePrim(Primitive::Kind kind, float size, float cx, float cy,
 
 // Vector-drawn glyphs — codepoint → cell-relative primitives. The font
 // is only used where it is good; these glyphs are painted directly so
-// adjacent cells join seamlessly (box/block), and so tiny geometric
-// shapes (spinner dots, bullets) survive antialiasing instead of
-// washing out to a speck. One table, one draw path — no per-glyph
-// exceptions.
+// adjacent cells join seamlessly (block characters), and so tiny
+// geometric shapes (spinner dots, bullets) survive antialiasing instead
+// of washing out to a speck. One table, one draw path — no per-glyph
+// exceptions. Box-drawing lines and corners (U+2500–257F) are
+// deliberately NOT here: the font draws them (their glyphs are designed
+// to join across cells).
 inline const std::unordered_map<char32_t, std::vector<Primitive>>& vectorGlyphs()
 {
     static const std::unordered_map<char32_t, std::vector<Primitive>> table = {
-        // -- Box drawing (U+2500–257F): strokes reach the cell edges so
-        //    adjacent cells join without font gaps.
-        {0x2500, {linePrim(0.0f, 0.5f, 1.0f, 0.5f)}}, // ─
-        {0x2502, {linePrim(0.5f, 0.0f, 0.5f, 1.0f)}}, // │
-        {0x250C, {linePrim(0.5f, 0.5f, 1.0f, 0.5f), linePrim(0.5f, 0.5f, 0.5f, 1.0f)}}, // ┌
-        {0x2510, {linePrim(0.0f, 0.5f, 0.5f, 0.5f), linePrim(0.5f, 0.5f, 0.5f, 1.0f)}}, // ┐
-        {0x2514, {linePrim(0.5f, 0.5f, 1.0f, 0.5f), linePrim(0.5f, 0.5f, 0.5f, 0.0f)}}, // └
-        {0x2518, {linePrim(0.0f, 0.5f, 0.5f, 0.5f), linePrim(0.5f, 0.5f, 0.5f, 0.0f)}}, // ┘
-        {0x251C, {linePrim(0.5f, 0.0f, 0.5f, 1.0f), linePrim(0.5f, 0.5f, 1.0f, 0.5f)}}, // ├
-        {0x2524, {linePrim(0.5f, 0.0f, 0.5f, 1.0f), linePrim(0.0f, 0.5f, 0.5f, 0.5f)}}, // ┤
-        {0x252C, {linePrim(0.0f, 0.5f, 1.0f, 0.5f), linePrim(0.5f, 0.5f, 0.5f, 1.0f)}}, // ┬
-        {0x2534, {linePrim(0.0f, 0.5f, 1.0f, 0.5f), linePrim(0.5f, 0.5f, 0.5f, 0.0f)}}, // ┴
-        {0x253C, {linePrim(0.0f, 0.5f, 1.0f, 0.5f), linePrim(0.5f, 0.0f, 0.5f, 1.0f)}}, // ┼
-        // Rounded corners: an arc in the cell center plus two legs.
-        {0x256D, {arcPrim(0.5f, 0.5f, 0.25f, 90.0f, 90.0f), linePrim(0.0f, 0.5f, 0.25f, 0.5f),
-                  linePrim(0.5f, 0.0f, 0.5f, 0.25f)}}, // ╭
-        {0x256E, {arcPrim(0.5f, 0.5f, 0.25f, 90.0f, -90.0f), linePrim(0.75f, 0.5f, 1.0f, 0.5f),
-                  linePrim(0.5f, 0.0f, 0.5f, 0.25f)}}, // ╮
-        {0x256F, {arcPrim(0.5f, 0.5f, 0.25f, 180.0f, -90.0f), linePrim(0.0f, 0.5f, 0.25f, 0.5f),
-                  linePrim(0.5f, 0.75f, 0.5f, 1.0f)}}, // ╯
-        {0x2570, {arcPrim(0.5f, 0.5f, 0.25f, 0.0f, -90.0f), linePrim(0.75f, 0.5f, 1.0f, 0.5f),
-                  linePrim(0.5f, 0.75f, 0.5f, 1.0f)}}, // ╰
         // -- Block characters (U+2580–259F): the whole cell in the
         //    background, the lit quadrants in the foreground.
         {0x2588, {fillPrim(0.0f, 0.0f, 1.0f, 1.0f, 1), fillPrim(0.0f, 0.0f, 1.0f, 1.0f, 0)}}, // █

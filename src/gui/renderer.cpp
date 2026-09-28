@@ -236,8 +236,7 @@ void TerminalRenderer::paintRow(QPainter& painter, int viewportRow, const Row& r
     // a rendition are batched into runs — one fillRect per background
     // run, one drawStaticText per glyph run (the layout cached) — so a
     // full row of uniform text is a handful of Qt calls, not one per
-    // cell. Box, block, and wide characters break runs and draw
-    // individually.
+    // cell. Block and wide characters break runs and draw individually.
     const double cw = m_cellW;
     const double ch = m_cellH;
     const double y0 = viewportRow * ch;
@@ -389,8 +388,8 @@ void TerminalRenderer::drawVectorGlyph(QPainter& painter, const QRectF& rect, ch
                                        const QColor& fg, const QColor& bg)
 {
     // Paint a vector glyph's primitives — the single draw path for every
-    // non-font glyph: box-drawing strokes, block quadrant fills, and the
-    // centered geometric shapes. `fg`/`bg` are the cell's rendered colors
+    // non-font glyph: block quadrant fills and the centered geometric
+    // shapes. `fg`/`bg` are the cell's rendered colors
     // (reverse/selection/dim already applied). `rect` is a float cell
     // rect — strokes land at fractional cell boundaries, so adjacent
     // cells join exactly.
@@ -402,9 +401,8 @@ void TerminalRenderer::drawVectorGlyph(QPainter& painter, const QRectF& rect, ch
     const auto& glyphs = vectorGlyphs();
     const auto it = glyphs.find(cp);
     if (it == glyphs.end()) {
-        // Classified as vector by a dense range but absent from the
-        // table — the heavy/double/dashed box variants. The font draws
-        // them.
+        // Unreachable: `paintRow` only routes table members here. The
+        // font draws everything else (box-drawing included).
         painter.setPen(fg);
         painter.drawText(rect, Qt::AlignCenter, QString::fromUcs4(&cp, 1));
         return;
@@ -420,13 +418,6 @@ void TerminalRenderer::drawVectorGlyph(QPainter& painter, const QRectF& rect, ch
             painter.drawLine(QPointF(x + prim.a * w, y + prim.b * h),
                              QPointF(x + prim.c * w, y + prim.d * h));
             break;
-        case Primitive::kArc: {
-            painter.setPen(fg);
-            const double r = prim.c * u;
-            painter.drawArc(QRectF(x + prim.a * w - r, y + prim.b * h - r, 2 * r, 2 * r),
-                            static_cast<int>(prim.d * 16), static_cast<int>(prim.e * 16));
-            break;
-        }
         case Primitive::kSquare:
         case Primitive::kCircle: {
             const double side = prim.a * u;

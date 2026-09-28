@@ -559,127 +559,32 @@ private slots:
         QCOMPARE(cellPixel(img, r, 0), QColor(0x12, 0x34, 0x56));
     }
 
-    // -- vector box-drawing and block characters --------------------------
+    // -- box-drawing glyphs render through the font ----------------------
 
-    void boxDrawingHorizontalLineTouchesBothEdges()
+    void boxDrawingGlyphsRenderThroughTheFont()
     {
-        // ─ (U+2500): a full-width line at mid-height — the font version
-        // leaves gaps at the cell edges; drawLine must not.
-        TerminalRenderer r(QFont("Menlo", 12));
-        QImage img = makeImage(r, 1, 1);
-        Cell c{U"\u2500"};
-        c.fg = 1;
-        r.render(img, makeSnapshot({makeRow({c})}));
-        const int cy = static_cast<int>(r.cellH()) / 2;
-        for (int x = 0; x < static_cast<int>(std::round(r.cellW())); ++x) {
-            QCOMPARE(img.pixelColor(x, cy), QColor(0xCD, 0x00, 0x00));
-        }
-        QVERIFY(img.pixelColor(0, 0) != QColor(0xCD, 0x00, 0x00)); // nothing above
-    }
-
-    void boxDrawingCornerIsOpenOnTheUnjoinedSide()
-    {
-        // ┌ (U+250C): horizontal reaches the right edge, vertical the
-        // bottom; the top and left edges stay open.
-        TerminalRenderer r(QFont("Menlo", 12));
-        QImage img = makeImage(r, 1, 1);
-        Cell c{U"\u250c"};
-        c.fg = 1;
-        r.render(img, makeSnapshot({makeRow({c})}));
-        const int cx = static_cast<int>(r.cellW()) / 2;
-        const int cy = static_cast<int>(r.cellH()) / 2;
-        const QColor fg(0xCD, 0x00, 0x00);
-        QCOMPARE(img.pixelColor(static_cast<int>(std::round(r.cellW())) - 1, cy), fg);
-        QCOMPARE(img.pixelColor(cx, static_cast<int>(r.cellH()) - 1), fg);
-        QVERIFY(img.pixelColor(0, cy) != fg);  // left open
-        QVERIFY(img.pixelColor(cx, 0) != fg);  // top open
-    }
-
-    void boxDrawingArmsAreOrthogonal()
-    {
-        // Every table glyph with the cell edges its strokes must reach.
-        // A wrong segment (a diagonal, or a missing arm) shows up as a
-        // colored pixel where the cell must stay open.
-        struct Arms {
-            char32_t cp;
-            bool t, b, l, r;
+        // Box-drawing lines and corners (U+2500–253C, U+256D–2570) are
+        // deliberately NOT vector-drawn — the font's glyphs are designed
+        // to join across cells (the vector table only covers block
+        // characters and geometric shapes). They must not be classified
+        // as vector codepoints, and each glyph must paint through the
+        // normal text path.
+        const std::vector<char32_t> glyphs = {
+            0x2500, 0x2502, // ─ │
+            0x250C, 0x2510, 0x2514, 0x2518, // ┌ ┐ └ ┘
+            0x251C, 0x2524, 0x252C, 0x2534, 0x253C, // ├ ┤ ┬ ┴ ┼
+            0x256D, 0x256E, 0x256F, 0x2570, // ╭ ╮ ╯ ╰
         };
-        const std::vector<Arms> kBoxArms = {
-            {0x2500, false, false, true, true},  // ─
-            {0x2502, true, true, false, false},  // │
-            {0x250C, false, true, false, true},  // ┌
-            {0x2510, false, true, true, false},  // ┐
-            {0x2514, true, false, false, true},  // └
-            {0x2518, true, false, true, false},  // ┘
-            {0x251C, true, true, false, true},   // ├
-            {0x2524, true, true, true, false},   // ┤
-            {0x252C, false, true, true, true},   // ┬
-            {0x2534, true, false, true, true},   // ┴
-            {0x253C, true, true, true, true},    // ┼
-        };
-        for (const Arms& arms : kBoxArms) {
+        const auto& table = vectorGlyphs();
+        for (const char32_t cp : glyphs) {
+            QVERIFY2(table.find(cp) == table.end(), "box-drawing must stay in the font");
             TerminalRenderer r(QFont("Menlo", 12));
             QImage img = makeImage(r, 1, 1);
-            Cell c{std::u32string(1, arms.cp)};
+            Cell c{std::u32string(1, cp)};
             c.fg = 1;
             r.render(img, makeSnapshot({makeRow({c})}));
-            const QColor fg(0xCD, 0x00, 0x00);
-            const int cx = static_cast<int>(r.cellW()) / 2;
-            const int cy = static_cast<int>(r.cellH()) / 2;
-            const int w = static_cast<int>(std::round(r.cellW()));
-            const int h = static_cast<int>(r.cellH());
-            const auto probe = [&](bool arm, int x, int y, const char* name) {
-                if (arm) {
-                    QVERIFY2(img.pixelColor(x, y) == fg, name);
-                } else {
-                    QVERIFY2(img.pixelColor(x, y) != fg, name);
-                }
-            };
-            probe(arms.t, cx, 0, "T arm");
-            probe(arms.b, cx, h - 1, "B arm");
-            probe(arms.l, 0, cy, "L arm");
-            probe(arms.r, w - 1, cy, "R arm");
-            // The top-left corner: a diagonal segment would paint it.
-            QVERIFY2(img.pixelColor(0, 0) != fg, "diagonal in the corner");
-        }
-    }
-
-    void roundedCornersReachTheirOwnEdges()
-    {
-        // ╭╮╯╰ (U+256D–2570): each corner's strokes must reach its own
-        // cell edges.
-        struct Corner {
-            char32_t cp;
-            bool t, b, l, r;
-        };
-        const std::vector<Corner> corners = {
-            {0x256D, true, false, true, false},  // ╭
-            {0x256E, true, false, false, true},  // ╮
-            {0x256F, false, true, true, false},  // ╯
-            {0x2570, false, true, false, true},  // ╰
-        };
-        for (const Corner& corner : corners) {
-            TerminalRenderer r(QFont("Menlo", 12));
-            QImage img = makeImage(r, 1, 1);
-            Cell c{std::u32string(1, corner.cp)};
-            c.fg = 1;
-            r.render(img, makeSnapshot({makeRow({c})}));
-            const QColor fg(0xCD, 0x00, 0x00);
-            const int cx = static_cast<int>(r.cellW()) / 2;
-            const int cy = static_cast<int>(r.cellH()) / 2;
-            const int w = static_cast<int>(std::round(r.cellW()));
-            const int h = static_cast<int>(r.cellH());
-            const auto probe = [&](bool arm, int x, int y, const char* name) {
-                if (arm) {
-                    QVERIFY2(img.pixelColor(x, y) == fg, name);
-                } else {
-                    QVERIFY2(img.pixelColor(x, y) != fg, name);
-                }
-            };
-            probe(corner.t, cx, 0, "T arm");
-            probe(corner.b, cx, h - 1, "B arm");
-            probe(corner.l, 0, cy, "L arm");
-            probe(corner.r, w - 1, cy, "R arm");
+            QVERIFY2(cellHasColorApprox(img, r, 0, QColor(0xCD, 0x00, 0x00)),
+                     "the font must paint the glyph");
         }
     }
 
@@ -796,9 +701,8 @@ private slots:
 
     void unlistedBoxVariantsFallBackToTheFont()
     {
-        // Heavy/double/dashed box variants sit inside the dense
-        // 0x2500–257F range but are not in the table — the vector
-        // drawer must fall back to the font instead of raising (a
+        // Heavy/double/dashed box variants (┃ ║ ═ ╧) are not in the
+        // vector table — the font draws them like any other text (a
         // real-world crash: opencode renders ┃).
         const std::vector<char32_t> glyphs = {0x2503, 0x2551, 0x2550, 0x2567}; // ┃ ║ ═ ╧
         for (const char32_t glyph : glyphs) {
