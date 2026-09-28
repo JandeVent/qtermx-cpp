@@ -1,0 +1,48 @@
+# sip-build config for the qtermx_gui extension (see python/README.md).
+#
+# Build:  cd python && sip-build --qmake ~/Qt/6.11.0/macos/bin/qmake
+
+[build-system]
+requires = ["PyQt-builder >=1.15, <2", "PyQt6"]
+build-backend = "sipbuild.api"
+
+[project]
+name = "qtermx-cpp"
+version = "0.1.0"
+description = "PyQt6 bindings for the qtermx-cpp terminal emulator"
+requires-python = ">=3.9"
+
+[tool.sip]
+project-factory = "pyqtbuild:PyQtProject"
+
+[tool.sip.project]
+name = "qtermx-cpp"
+sip-files-dir = "sip/qtermx_gui"
+
+# The widget derives from QWidget (QtCore/QtGui are qmake defaults).
+[tool.sip.builder]
+qmake-settings = ["QT += widgets"]
+
+[tool.sip.bindings.qtermx_gui]
+sip-file = "qtermx_gui.sip"
+# Screen::resize throws — sip-build defaults to -fno-exceptions.
+exceptions = true
+# terminal_widget.h has Q_OBJECT — qmake runs moc on listed headers.
+headers = ["../src/gui/terminal_widget.h"]
+sources = [
+    "../src/emulator.cpp",
+    "../src/parser.cpp",
+    "../src/pty.cpp",
+    "../src/screen.cpp",
+    "../src/session.cpp",
+    "../src/utf8_decoder.cpp",
+    "../src/wcwidth.cpp",
+    "../src/gui/input_encoder.cpp",
+    "../src/gui/renderer.cpp",
+    "../src/gui/terminal_widget.cpp",
+]
+include-dirs = ["../src", "../src/gui"]
+extra-compile-args = ["-std=c++17"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,6 +1,7 @@
 # Build artifacts
 build/
 *.user
+__pycache__/
 
 # Qt Creator
 .qtcreator/
@@ -13,3 +14,5 @@ build/
 .idea/
 .vscode/.tmp/
 .tmp/
+
+target/
