@@ -30,6 +30,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "pty.h"
 #include "renderer.h"
 #include "screen.h"
 #include "selection.h"
@@ -437,6 +438,46 @@ private slots:
         }));
     }
 
+    void realPtyWidgetResizeReachesChild()
+    {
+        // The full GUI chain with a real pty — widget resize → session →
+        // pty TIOCSWINSZ → SIGWINCH → child sees the new size (the
+        // Textual reflow path). The fake-pty test above proves the
+        // widget→session link; this proves the whole chain end to end.
+        auto* pty = new qtermx::Pty(
+            {"/usr/bin/python3", "-c",
+             "import signal, shutil, time\n"
+             "def on_winch(signum, frame):\n"
+             "    size = shutil.get_terminal_size()\n"
+             "    print('WINCH:%dx%d' % (size.columns, size.lines), flush=True)\n"
+             "signal.signal(signal.SIGWINCH, on_winch)\n"
+             "print('READY', flush=True)\n"
+             "time.sleep(5)\n"},
+            {}, "", 5, 10);
+        auto* session = new Session(pty, 5, 10);
+        auto* widget = new TerminalWidget(session);
+        session->start();
+        QVERIFY(waitUntil([&] { return !session->snapshots().empty(); }));
+        widget->show();
+        // Resize the widget to a size that yields a (30, 100) grid.
+        const int extent = widget->scrollbarWidth();
+        widget->resize(static_cast<int>(std::ceil(100 * widget->cellW())) + extent,
+                       static_cast<int>(30 * widget->cellH()));
+        // The child must report the new size through shutil (SIGWINCH).
+        QVERIFY(waitUntil([&] {
+            for (int r = 0; r < widget->gridLines(); ++r) {
+                if (widget->hasTextRow(r, "WINCH:100x30")) {
+                    return true;
+                }
+            }
+            return false;
+        }));
+        session->close();
+        delete widget;
+        delete session;
+        delete pty;
+    }
+
     void scrollbarSitsAtTheRightEdge()
     {
         for (int i = 0; i < 30; ++i) {
@@ -473,6 +514,32 @@ private slots:
         mouseRelease(m_widget, p3);
         press(m_widget, Qt::Key_C, copyMods());
         QCOMPARE(clipboard()->text(), QString("hell"));
+    }
+
+    void cellHitTestTracksThePaintedGrid()
+    {
+        // The renderer paints cell C at C × cellW (float advance); the
+        // hit-test must map a click at the painted cell's center back to
+        // C. Regression: truncating cellW to int before dividing drifted
+        // the hit-test right of the painted grid — the selection landed
+        // one cell off the mouse pointer (the Python oracle divides by
+        // the float cell_w).
+        m_fake->output("abcdefghij"); // 10 distinct cells on row 0
+        QVERIFY(waitUntil([&] { return m_widget->hasText("abcdefghij"); }));
+        clipboard()->setText("");
+        for (int c = 0; c + 1 < m_widget->gridColumns(); ++c) {
+            const QPointF p0 = cellPos(*m_widget, 0, c);
+            const QPointF p1 = cellPos(*m_widget, 0, c + 1);
+            mousePress(m_widget, p0);
+            mouseMove(m_widget, p1);
+            mouseRelease(m_widget, p1);
+            const auto sel = m_widget->selection();
+            QVERIFY2(sel.has_value(), "drag must create a selection");
+            QCOMPARE(sel->row1, 0);
+            QCOMPARE(sel->col1, c);
+            QCOMPARE(sel->row2, 0);
+            QCOMPARE(sel->col2, c + 1);
+        }
     }
 
     void doubleClickSelectsTheWord()

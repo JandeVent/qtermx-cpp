@@ -529,9 +529,15 @@ bool TerminalWidget::mouseEnabledImpl() const
 
 std::pair<int, int> TerminalWidget::cellAt(const QPointF& pos) const
 {
-    // The viewport (row, col) under a widget position, clamped.
+    // The viewport (row, col) under a widget position, clamped. The
+    // column divides by the *float* cell width — the renderer paints
+    // cell C at C × cellW (fractional advance), so truncating cellW to
+    // int first drifts the hit-test right of the painted grid (the
+    // Python oracle divides by the float cell_w). The position is
+    // truncated to int first, mirroring Python's int(pos.x()) // cell_w.
     const int row = static_cast<int>(pos.y()) / static_cast<int>(m_renderer.cellH());
-    const int col = static_cast<int>(pos.x()) / static_cast<int>(m_renderer.cellW());
+    const int col = static_cast<int>(
+        std::floor(static_cast<int>(pos.x()) / m_renderer.cellW()));
     return {std::clamp(row, 0, m_lines - 1), std::clamp(col, 0, m_columns - 1)};
 }
 
@@ -545,8 +551,12 @@ void TerminalWidget::sendMouse(QSinglePointEvent* event, InputEncoder::MouseActi
         return;
     }
     const QPointF pos = event->position();
-    const int col = std::clamp(static_cast<int>(pos.x()) / static_cast<int>(m_renderer.cellW()) + 1,
-                               1, m_columns);
+    // 1-based, dividing by the float cell width (see cellAt — the
+    // renderer's grid is fractional, an int cellW drifts the protocol
+    // coordinates off the painted cells).
+    const int col = std::clamp(
+        static_cast<int>(std::floor(static_cast<int>(pos.x()) / m_renderer.cellW())) + 1, 1,
+        m_columns);
     const int row = std::clamp(static_cast<int>(pos.y()) / static_cast<int>(m_renderer.cellH()) + 1,
                                1, m_lines);
     int mods = 0;

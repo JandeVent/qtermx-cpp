@@ -131,6 +131,10 @@ public:
     // arrives (the reader thread is quiescent between emissions).
     Screen& screen() { return m_screen; }
 
+    // The pty the session drives. Non-owning — the caller keeps the Pty
+    // alive (the Python binding pins it with /KeepReference/).
+    PtyLike* pty() const { return m_pty; }
+
 private:
     void run();
     bool drainCommands();

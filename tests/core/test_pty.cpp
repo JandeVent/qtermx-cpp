@@ -132,6 +132,117 @@ TEST_CASE(pty_set_window_size_reaches_child)
     pty.close();
 }
 
+TEST_CASE(pty_child_sees_resize_through_shutil_get_terminal_size)
+{
+    // Regression (Textual resize): Python's shutil.get_terminal_size() —
+    // the size source Textual and other TUIs use — prefers the COLUMNS/
+    // LINES env vars over the TIOCGWINSZ ioctl (Python 3.14 included).
+    // If the pty forces or inherits them, they are frozen at spawn and a
+    // resize never reaches the app: the layout never reflows. The child
+    // must report the ioctl size and see a resize through shutil even
+    // when COLUMNS/LINES are supplied.
+    Pty pty = spawnChild("import shutil, time\n"
+                         "print('READY', flush=True)\n"
+                         "size = shutil.get_terminal_size()\n"
+                         "deadline = time.monotonic() + 3.0\n"
+                         "while time.monotonic() < deadline and size.columns != 100:\n"
+                         "    size = shutil.get_terminal_size()\n"
+                         "    time.sleep(0.01)\n"
+                         "print('SIZE:%dx%d' % (size.columns, size.lines), flush=True)\n",
+                         {{"COLUMNS", "999"}, {"LINES", "999"}}, "", 30, 80);
+    readUntil(pty, "READY");
+    pty.setWindowSize(30, 100);
+    const std::string out = readUntil(pty, "SIZE:100x30");
+    QTERMX_CHECK(out.find("SIZE:100x30") != std::string::npos);
+    pty.close();
+}
+
+TEST_CASE(pty_resize_delivers_sigwinch_to_child)
+{
+    // Textual and other TUIs reflow on SIGWINCH, not on polling the
+    // ioctl: a resize that only changes the winsize is invisible to
+    // them. TIOCSWINSZ on the master must deliver SIGWINCH to the
+    // child's foreground process group.
+    Pty pty = spawnChild("import signal, shutil, sys, time\n"
+                         "def on_winch(signum, frame):\n"
+                         "    size = shutil.get_terminal_size()\n"
+                         "    print('WINCH:%dx%d' % (size.columns, size.lines), flush=True)\n"
+                         "signal.signal(signal.SIGWINCH, on_winch)\n"
+                         "print('READY', flush=True)\n"
+                         "time.sleep(5)\n");
+    readUntil(pty, "READY");
+    pty.setWindowSize(30, 100);
+    const std::string out = readUntil(pty, "WINCH:100x30");
+    QTERMX_CHECK(out.find("WINCH:100x30") != std::string::npos);
+    pty.close();
+}
+
+TEST_CASE(pty_resize_reaches_python_grandchild_through_shell)
+{
+    // The real-app scenario: the pty child is a login shell; the TUI
+    // (python) is a grandchild. SIGWINCH must propagate through the
+    // shell to the foreground job, and shutil.get_terminal_size() must
+    // report the new size (the Textual reflow path). The probe script
+    // goes to a temp file — a multi-line `-c` string would fight the
+    // shell's quote parsing.
+    char tmpl[] = "/tmp/qtermx-winch-XXXXXX";
+    const int fd = mkstemp(tmpl);
+    QTERMX_CHECK(fd >= 0);
+    const std::string script =
+        "import signal, shutil, time\n"
+        "def on_winch(signum, frame):\n"
+        "    size = shutil.get_terminal_size()\n"
+        "    print('WINCH:%dx%d' % (size.columns, size.lines), flush=True)\n"
+        "signal.signal(signal.SIGWINCH, on_winch)\n"
+        "print('READY', flush=True)\n"
+        "time.sleep(5)\n";
+    QTERMX_CHECK(write(fd, script.data(), script.size()) == static_cast<ssize_t>(script.size()));
+    ::close(fd);
+    Pty pty({"/bin/zsh", "-l"}, {}, "", 24, 80);
+    pty.sendData("/opt/miniconda3/envs/textual/bin/python " + std::string(tmpl) + "\n");
+    readUntil(pty, "READY");
+    pty.setWindowSize(30, 100);
+    const std::string out = readUntil(pty, "WINCH:100x30");
+    QTERMX_CHECK(out.find("WINCH:100x30") != std::string::npos);
+    pty.close();
+    unlink(tmpl);
+}
+
+TEST_CASE(pty_resize_reflows_actual_zeroro_textual_app)
+{
+    // The definitive reproduction: run the real Zeroro Textual app
+    // through the C++ pty (login shell → conda activate → python
+    // main.py), resize, and check the app redraws (Textual emits a
+    // repaint on SIGWINCH). This is the exact user scenario.
+    Pty pty({"/bin/zsh", "-l"}, {}, "", 24, 80);
+    pty.sendData("conda activate textual\n");
+    readUntil(pty, "textual", 10.0);
+    pty.sendData("cd /Users/jan/Devel/Zeroro && python main.py\n");
+    // Textual enters the alternate screen on startup.
+    const std::string startup = readUntil(pty, "\x1b[?1049h", 15.0);
+    QTERMX_CHECK(startup.find("\x1b[?1049h") != std::string::npos);
+    // Drain any remaining startup output.
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    std::string drained;
+    {
+        fd_set fds;
+        FD_ZERO(&fds);
+        FD_SET(pty.masterFd(), &fds);
+        struct timeval tv {0, 0};
+        while (select(pty.masterFd() + 1, &fds, nullptr, nullptr, &tv) > 0) {
+            const auto chunk = pty.read();
+            if (!chunk.has_value() || chunk->empty()) {
+                break;
+            }
+            drained += *chunk;
+        }
+    }
+    pty.setWindowSize(30, 100);
+    const std::string after = readUntil(pty, "\x1b[1;1H", 5.0);
+    QTERMX_CHECK(after.find("\x1b[1;1H") != std::string::npos);
+    pty.close();
+}
+
 TEST_CASE(pty_child_exit_is_detected_and_reaped)
 {
     Pty pty = spawnChild("print('BYE', flush=True)\n");
@@ -162,14 +273,17 @@ TEST_CASE(pty_child_gets_colorterm_truecolor)
     pty.close();
 }
 
-TEST_CASE(pty_child_gets_geometry_environment)
+TEST_CASE(pty_child_does_not_get_geometry_environment)
 {
+    // COLUMNS/LINES must NOT reach the child — even stale values from
+    // the supplied env (see the rationale in Pty's constructor: they
+    // would freeze the size Python 3.14's shutil reports to TUIs).
     Pty pty = spawnChild("import os\n"
                          "print('GEOM:%sx%s' % (os.environ.get('COLUMNS', ''),"
                          " os.environ.get('LINES', '')), flush=True)\n",
-                         {}, "", 33, 120);
+                         {{"COLUMNS", "999"}, {"LINES", "999"}}, "", 33, 120);
     const std::string out = readUntil(pty, "GEOM:");
-    QTERMX_CHECK(out.find("GEOM:120x33") != std::string::npos);
+    QTERMX_CHECK(out.find("GEOM:x") != std::string::npos);
     pty.close();
 }
 

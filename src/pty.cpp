@@ -1,5 +1,6 @@
 #include "pty.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <csignal>
@@ -229,12 +230,14 @@ Pty::Pty(std::vector<std::string> command, std::vector<std::pair<std::string, st
     // irrelevant to the session (spec: TUIs behave differently).
     // COLORTERM tells truecolor-gated apps (vim termguicolors, fish,
     // git-delta…) that 38;2/48;2 will render correctly. COLUMNS/LINES
-    // too: some programs read them instead of the winsize ioctl.
+    // must NOT be set (and any inherited values are stripped below):
+    // Python 3.14's shutil.get_terminal_size() — the size source of
+    // Textual and other TUIs — prefers them over the TIOCGWINSZ ioctl,
+    // and they are frozen at spawn, so a resize would never reach the
+    // app. The ioctl is authoritative (xterm sets neither).
     std::vector<std::pair<std::string, std::string>> childEnv = std::move(env);
     childEnv.emplace_back("TERM", kDefaultTerm);
     childEnv.emplace_back("COLORTERM", kColorterm);
-    childEnv.emplace_back("COLUMNS", std::to_string(cols));
-    childEnv.emplace_back("LINES", std::to_string(rows));
 
     // The line discipline on the master, and the initial size on both
     // fds (macOS only propagates TIOCSWINSZ from the slave before a
@@ -311,6 +314,13 @@ Pty::Pty(std::vector<std::string> command, std::vector<std::pair<std::string, st
                 storage.push_back(entry);
             }
         }
+        // COLUMNS/LINES must not reach the child — strip any inherited
+        // or supplied values (see above): they would freeze the size
+        // TUIs report.
+        storage.erase(std::remove_if(storage.begin(), storage.end(), [](const std::string& s) {
+                          return s.compare(0, 8, "COLUMNS=") == 0 || s.compare(0, 6, "LINES=") == 0;
+                      }),
+                      storage.end());
         std::vector<char*> envp;
         envp.reserve(storage.size() + 1);
         for (std::string& s : storage) {
