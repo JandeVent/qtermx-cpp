@@ -1,4 +1,4 @@
-// T20 — OSC 4/10/11/12 color queries + DA1/DSR/DECRPM dialogue — the
+// T20 — OSC 4/10/11/12 color queries + DA1/DSR dialogue — the
 // terminal answers the child's theme detection queries and applies its
 // cursor color (Phase 5) (port of tests/emulator/test_osc_color.py,
 // extended with the query-reply tests the ROADMAP specifies).
@@ -9,7 +9,9 @@
 // with the xterm 16-bit `rgb:RRRR/GGGG/BBBB` form. Set forms
 // parse-and-ignore (palette mutation is a follow-up); `OSC 12` (cursor
 // color) and `OSC 112` (reset) apply — the cursor color is visible
-// state. DA1/DSR/DECRPM answer the terminfo-driven apps' queries.
+// state. DA1/DSR answer the terminfo-driven apps' queries; DECRQM
+// (`$p`) queries are deliberately unanswered (see
+// decrqm_queries_are_ignored).
 #include "harness.h"
 #include "emulator.h"
 #include "parser.h"
@@ -241,7 +243,7 @@ TEST_CASE(query_without_reply_callback_is_safe)
     parser.flush();
 }
 
-// -- DA1 / DSR / DECRPM (the ROADMAP's query-reply spec) -----------------
+// -- DA1 / DSR (the ROADMAP's query-reply spec) -------------------------
 
 TEST_CASE(da1_replies_vt100_with_advanced_video)
 {
@@ -272,18 +274,21 @@ TEST_CASE(dsr_other_codes_are_noops)
     QTERMX_CHECK(h.replies.empty());
 }
 
-TEST_CASE(decrpm_reports_mode_state)
+TEST_CASE(decrqm_queries_are_ignored)
 {
-    // DECRPM: `ESC [ ? Ps $ p` → `ESC [ ? Ps ; value $ y` — 1 when
-    // set, 2 when reset.
+    // DECRQM (`ESC [ ? Ps $ p`) is not implemented — the Python
+    // reference has no `$p` handler, and answering it is actively
+    // harmful: Textual queries mode 2048 (in-band window resize) and
+    // treats any DECRPM reply as "supported", switching off its
+    // SIGWINCH fallback and waiting for in-band `CSI 8;…t`
+    // notifications this terminal never sends — resize then never
+    // reaches the app. Silence keeps Textual on the SIGWINCH path
+    // (pyqtermx parity).
     ReplyHarness h;
-    h.feed("\x1b[?25h\x1b[?25$p"); // DECTCEM on
-    QTERMX_CHECK(h.replies.size() == 1);
-    QTERMX_CHECK(h.replies[0] == "\x1b[?25;1$y");
-    h.feed("\x1b[?25l\x1b[?25$p"); // DECTCEM off
-    QTERMX_CHECK(h.replies.size() == 2);
-    QTERMX_CHECK(h.replies[1] == "\x1b[?25;2$y");
-    h.feed("\x1b[?999$p"); // unknown mode — reset (the default)
-    QTERMX_CHECK(h.replies.size() == 3);
-    QTERMX_CHECK(h.replies[2] == "\x1b[?999;2$y");
+    h.feed("\x1b[?25h\x1b[?25$p"); // DECTCEM on — still no reply
+    QTERMX_CHECK(h.replies.empty());
+    h.feed("\x1b[?999$p"); // unknown mode — no reply either
+    QTERMX_CHECK(h.replies.empty());
+    h.feed("\x1b[?2048$p"); // Textual's in-band resize query — must stay silent
+    QTERMX_CHECK(h.replies.empty());
 }

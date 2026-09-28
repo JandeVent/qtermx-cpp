@@ -109,10 +109,13 @@ public:
     void save(const Params& params);
     void restore(const Params& params);
     // Phase 5 — dialogue: the terminal answers the child's queries
-    // (terminfo-driven apps hang without these).
+    // (terminfo-driven apps hang without these). DECRQM (`$p`) queries
+    // are deliberately unanswered — the Python reference has no `$p`
+    // handler, and replying breaks Textual (it treats any DECRPM reply
+    // as "mode supported", disables its SIGWINCH fallback, and waits
+    // for in-band `CSI 8;…t` notifications this terminal never sends).
     void da1(const Params& params);   // DA1 — device attributes
     void dsr(const Params& params);   // DSR — device status report
-    void decrpm(const Params& params); // DECRPM — DEC report mode
 
     // ESC handlers (no params).
     void ind();
@@ -146,9 +149,9 @@ private:
     void oscColorQuery(const std::vector<std::string>& fields);
     void oscCursorColor(const std::vector<std::string>& fields);
     void oscReply(const std::string& payload);
-    // Send a raw reply to the child (DA1/DSR/DECRPM — CSI sequences,
-    // not OSC); a missing reply callback (headless tests) silently
-    // drops it.
+    // Send a raw reply to the child (DA1/DSR — CSI sequences, not
+    // OSC); a missing reply callback (headless tests) silently drops
+    // it.
     void sendReply(const std::string& payload);
 
     Screen& m_screen;

@@ -231,7 +231,7 @@ on close with a foreground job running. ✅ (552 core + 46 input + 62 render +
 
 | Python | C++ | Notes |
 |---|---|---|
-| `emulator.py` (queries) | `Emulator` | DA1 (`ESC [ c` → `ESC [ ?1;2c`), DSR cursor position (`ESC [ 6n` → `ESC [ row;colR`), DECRPM (`ESC [ ? Ps $ p` → `ESC [ ? Ps ; value $ y`). Terminfo-driven apps hang without these. ✅ |
+| `emulator.py` (queries) | `Emulator` | DA1 (`ESC [ c` → `ESC [ ?1;2c`), DSR cursor position (`ESC [ 6n` → `ESC [ row;colR`). Terminfo-driven apps hang without these. DECRQM (`ESC [ ? Ps $ p`) is deliberately unanswered — the Python reference has no `$p` handler, and replying breaks Textual (any DECRPM reply reads as "mode supported", disabling its SIGWINCH fallback). ✅ |
 | `emulator.py` (OSC dispatch) | `Emulator::oscDispatch` | Split payload on `;`, dispatch on first field: `4`/`10`/`11` color queries (xterm `rgb:RRRR/GGGG/BBBB` form, sourced from `Palette`), `12`/`112` cursor color. Set forms and the title/hyperlink/clipboard/cwd/shell-integration/notification OSC parse-and-ignore. ✅ |
 | `session.py` (replies) | `Session` | Replies flow back through the PTY to the child (the reply callback wired to the pty). ✅ |
 | `widget.py` (mouse/focus) | `TerminalWidget` | Mouse tracking (1000/1003/1006 SGR), bracketed paste (2004), focus reporting (`?1004` → `ESC [ I`/`ESC [ O`). ✅ |
@@ -239,7 +239,7 @@ on close with a foreground job running. ✅ (552 core + 46 input + 62 render +
 ### Tests to port
 
 - `tests/emulator/test_osc_color.py` ✅ (19 tests → test_emulator_osc_color.cpp)
-- New: query-reply tests (DA1/DSR/DECRPM) ✅
+- New: query-reply tests (DA1/DSR; DECRQM ignored — Textual resize regression) ✅
 
 ### Milestone
 
