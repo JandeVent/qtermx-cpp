@@ -12,11 +12,11 @@ behavioral and architectural source of truth; every layer below ports its
 Python counterpart **and its tests**. The result is a terminal you can
 actually type into: `./build/qtermx-cpp` spawns your shell.
 
-And it ships in a tiny package: the release executable is **~360 KB** (a
-~1.7 MB packaged app), with **no dependencies beyond Qt and the system
-libraries** — the entire emulation stack (15-state parser, screen model, PTY
-layer, renderer) fits in a few hundred kilobytes, so it deploys as fast as it
-runs.
+And it ships in a tiny package: the release executable is **only ~364 KB**
+(the entire bundled `.app` comes to ~368 KB), with **no dependencies beyond
+Qt and the system libraries** — the whole emulation stack (15-state parser,
+screen model, PTY layer, renderer) fits in a few hundred kilobytes, so it
+deploys as fast as it runs.
 
 ![A live session rendered by the qtermx-cpp pipeline through its SIP/PyQt6 bindings](https://raw.githubusercontent.com/JandeVent/qtermx-cpp/main/python/demo.png)
 
@@ -40,8 +40,8 @@ same pipeline the GUI ships, driven through the SIP/PyQt6 bindings
 
 **Size & dependencies**
 
-- A ~1.7 MB packaged app; the release executable itself is ~360 KB —
-  the whole terminal, from byte parser to pixel renderer, in a few
+- A **~364 KB** release executable (the whole `.app` bundle: ~368 KB) —
+  the entire terminal, from byte parser to pixel renderer, in a few
   hundred kilobytes.
 - **Zero dependencies beyond Qt and the system libraries** — no
   third-party runtime, no vendored C libraries: the 15-state parser,
