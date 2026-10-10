@@ -123,9 +123,13 @@ same pipeline the GUI ships, driven through the SIP/PyQt6 bindings
   foreground process group, `TERM=xterm-256color` and
   `COLORTERM=truecolor` forced for the child (COLUMNS/LINES are
   deliberately *not* set — terminals that inspect them would prefer
-  them over the `TIOCSWINSZ` ioctl, and they go stale on resize),
-  `TIOCSWINSZ` resize propagation, graceful close (EOF → SIGTERM →
-  SIGKILL with bounded waits).
+  them over the `TIOCSWINSZ` ioctl, and they go stale on resize), a
+  UTF-8 `LANG`/`LC_CTYPE` fallback injected when the launching
+  environment has no locale at all (a Finder/Dock launch — without it
+  the child runs in the POSIX locale and `ls` prints non-ASCII
+  filenames as `??????`; pyqtermx omits this because it assumes a
+  launcher that already exports one), `TIOCSWINSZ` resize propagation,
+  graceful close (EOF → SIGTERM → SIGKILL with bounded waits).
 - Spawn in a working directory: `Pty(cwd=...)` chdirs the child before
   exec, so a session can start in a requested folder.
 - Foreground-job close guard: `Pty::hasForegroundJob()` (via

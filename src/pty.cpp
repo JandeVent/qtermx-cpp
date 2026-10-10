@@ -183,6 +183,24 @@ std::optional<std::string> processName(int pid)
 
 } // namespace
 
+bool hasLocaleEnv(const std::vector<std::string>& entries)
+{
+    // For the *presence* check any non-empty one of the three counts:
+    // setlocale() resolves LC_ALL > LC_CTYPE > LANG, so LC_ALL=C already
+    // pins the child to C regardless of the other two.
+    for (const std::string& entry : entries) {
+        for (const char* key : {"LC_ALL", "LC_CTYPE", "LANG"}) {
+            const size_t len = std::strlen(key);
+            // `size > len + 1`: the '=' is present and the value is
+            // non-empty ("LANG=" is setlocale's "unset").
+            if (entry.size() > len + 1 && entry.compare(0, len, key) == 0 && entry[len] == '=') {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 Pty::Pty(std::vector<std::string> command, std::vector<std::pair<std::string, std::string>> env,
          std::string cwd, int rows, int cols)
     : m_rows(rows)
@@ -238,6 +256,28 @@ Pty::Pty(std::vector<std::string> command, std::vector<std::pair<std::string, st
     std::vector<std::pair<std::string, std::string>> childEnv = std::move(env);
     childEnv.emplace_back("TERM", kDefaultTerm);
     childEnv.emplace_back("COLORTERM", kColorterm);
+
+    // Locale fallback (kFallbackLang/kFallbackCtype): a Finder/Dock
+    // launch hands the app launchd's environment — no LANG/LC_* at all —
+    // so without this the child shell and every program it runs would
+    // see the POSIX locale (BSD `ls` prints a non-ASCII filename as
+    // ??????, zsh drops multibyte editing and completion). The decision
+    // is made against the parent's environment *plus* the caller's `env`
+    // overlay: a locale from either is the user's choice and is left
+    // untouched.
+    {
+        std::vector<std::string> localeProbe;
+        for (char** e = environ; *e != nullptr; ++e) {
+            localeProbe.emplace_back(*e);
+        }
+        for (const auto& [key, value] : childEnv) {
+            localeProbe.push_back(key + "=" + value);
+        }
+        if (!hasLocaleEnv(localeProbe)) {
+            childEnv.emplace_back("LANG", kFallbackLang);
+            childEnv.emplace_back("LC_CTYPE", kFallbackCtype);
+        }
+    }
 
     // The line discipline on the master, and the initial size on both
     // fds (macOS only propagates TIOCSWINSZ from the slave before a

@@ -89,6 +89,49 @@ Pty spawnChild(const std::string& script, std::vector<std::pair<std::string, std
     return Pty({"/usr/bin/python3", "-c", script}, std::move(env), cwd, rows, cols);
 }
 
+// Save one environment variable, override it for the scope (nullptr
+// unsets), restore it on exit. The locale-fallback tests need a
+// *launching* environment without any locale — the developer's shell
+// normally has one, so it must be stripped deterministically.
+class ScopedEnv {
+public:
+    ScopedEnv(const char* key, const char* value)
+        : m_key(key)
+    {
+        if (const char* saved = getenv(key)) {
+            m_saved = saved;
+            m_had = true;
+        }
+        if (value != nullptr) {
+            setenv(key, value, 1);
+        } else {
+            unsetenv(key);
+        }
+    }
+    ~ScopedEnv()
+    {
+        if (m_had) {
+            setenv(m_key.c_str(), m_saved.c_str(), 1);
+        } else {
+            unsetenv(m_key.c_str());
+        }
+    }
+    ScopedEnv(const ScopedEnv&) = delete;
+    ScopedEnv& operator=(const ScopedEnv&) = delete;
+
+private:
+    std::string m_key;
+    std::string m_saved;
+    bool m_had = false;
+};
+
+// A locale-less launching environment — the Finder/Dock (launchd) case.
+struct NoLocaleEnv {
+    ScopedEnv lcAll{"LC_ALL", nullptr};
+    ScopedEnv lcCtype{"LC_CTYPE", nullptr};
+    ScopedEnv lang{"LANG", nullptr};
+};
+
 } // namespace
 
 TEST_CASE(pty_spawn_runs_child_and_reads_output)
@@ -271,6 +314,85 @@ TEST_CASE(pty_child_gets_colorterm_truecolor)
     const std::string out = readUntil(pty, "COLORTERM=");
     QTERMX_CHECK(out.find("COLORTERM=truecolor") != std::string::npos);
     pty.close();
+}
+
+TEST_CASE(pty_locale_presence_detection)
+{
+    // The fallback locale is injected only when the launching environment
+    // carries none: any non-empty LC_ALL/LC_CTYPE/LANG is the user's
+    // choice (LC_ALL=C included) and is respected.
+    QTERMX_CHECK(!hasLocaleEnv({}));
+    QTERMX_CHECK(!hasLocaleEnv({"TERM=xterm-256color", "PATH=/usr/bin:/bin"}));
+    QTERMX_CHECK(hasLocaleEnv({"LANG=en_US.UTF-8"}));
+    QTERMX_CHECK(hasLocaleEnv({"LC_CTYPE=UTF-8"}));
+    QTERMX_CHECK(hasLocaleEnv({"LC_ALL=C"}));
+    // Empty values are setlocale()'s "unset" — they still trigger the
+    // fallback...
+    QTERMX_CHECK(!hasLocaleEnv({"LANG="}));
+    QTERMX_CHECK(!hasLocaleEnv({"LC_CTYPE="}));
+    // ...and near-miss keys must not match.
+    QTERMX_CHECK(!hasLocaleEnv({"MY_LANG=en_US.UTF-8"}));
+    QTERMX_CHECK(!hasLocaleEnv({"LC_CTYPES=UTF-8"}));
+}
+
+TEST_CASE(pty_child_gets_utf8_locale_when_launcher_has_none)
+{
+    // The Finder/Dock regression: launchd's environment has no locale at
+    // all, so the child shell ran in the POSIX locale — `ls ~/Downloads`
+    // showed Chinese filenames as ?????? (BSD ls replaces every non-ASCII
+    // byte) and zsh's multibyte editing/completion was off. The pty must
+    // hand the child a UTF-8 locale, as every other terminal does.
+    NoLocaleEnv noLocale;
+    Pty pty = spawnChild("import locale, os\n"
+                         "print('LOCALE:%s|%s|%s' % (os.environ.get('LANG', ''),"
+                         " os.environ.get('LC_CTYPE', ''),"
+                         " locale.getpreferredencoding(False)), flush=True)\n");
+    const std::string out = readUntil(pty, "LOCALE:");
+    const std::string expected =
+        std::string("LOCALE:") + kFallbackLang + "|" + kFallbackCtype + "|UTF-8";
+    QTERMX_CHECK(out.find(expected) != std::string::npos);
+    pty.close();
+}
+
+TEST_CASE(pty_child_locale_is_not_overridden_when_launcher_has_one)
+{
+    // An explicit locale is never overridden: a launcher that pins the
+    // POSIX locale (or any other) keeps it — the fallback only fills a
+    // vacuum.
+    ScopedEnv lcAll("LC_ALL", nullptr);
+    ScopedEnv ctype("LC_CTYPE", "POSIX");
+    ScopedEnv lang("LANG", nullptr);
+    Pty pty = spawnChild("import os\n"
+                         "print('LOCALE:%s|%s' % (os.environ.get('LC_CTYPE', ''),"
+                         " os.environ.get('LANG', 'unset')), flush=True)\n");
+    const std::string out = readUntil(pty, "LOCALE:");
+    QTERMX_CHECK(out.find("LOCALE:POSIX|unset") != std::string::npos);
+    pty.close();
+}
+
+TEST_CASE(pty_ls_prints_utf8_filenames_when_launcher_has_no_locale)
+{
+    // The user-visible regression, end to end: a directory with a Chinese
+    // filename, `ls` over the pty, no locale in the launching environment.
+    // Before the fallback the child ran in the POSIX locale and BSD `ls`
+    // replaced the name's bytes with ?????? (the ~/Downloads symptom);
+    // now the raw UTF-8 bytes arrive at the emulator's decoder.
+    NoLocaleEnv noLocale;
+    char tmpl[] = "/tmp/qtermx-locale-XXXXXX";
+    char* dir = mkdtemp(tmpl);
+    QTERMX_CHECK(dir != nullptr);
+    const std::string folder = dir;
+    const std::string name = "\xe6\x96\x87\xe4\xbb\xb6.txt"; // 文件.txt
+    std::FILE* file = std::fopen((folder + "/" + name).c_str(), "w");
+    QTERMX_CHECK(file != nullptr);
+    std::fclose(file);
+    Pty pty({"/bin/ls", "-1", folder}, {}, "", 24, 80);
+    const std::string out = readUntil(pty, ".txt");
+    QTERMX_CHECK(out.find(name) != std::string::npos);
+    QTERMX_CHECK(out.find('?') == std::string::npos);
+    pty.close();
+    unlink((folder + "/" + name).c_str());
+    rmdir(folder.c_str());
 }
 
 TEST_CASE(pty_child_does_not_get_geometry_environment)

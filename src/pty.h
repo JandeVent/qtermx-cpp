@@ -27,6 +27,32 @@ inline constexpr const char* kDefaultTerm = "xterm-256color";
 // — TERM=xterm-256color alone does not tell them we can render RGB.
 inline constexpr const char* kColorterm = "truecolor";
 
+// The UTF-8 locale the child receives when the launching environment has
+// none — a Finder/Dock launch hands the app launchd's environment, which
+// has no LANG/LC_* at all. In the POSIX locale BSD `ls` replaces every
+// non-ASCII filename byte with '?' (a Chinese filename shows as ??????),
+// and zsh disables multibyte editing and completion. Terminal.app,
+// iTerm2, ghostty and the JetBrains IDEs all export a UTF-8 locale in
+// this situation (macOS's canonical pair, what Terminal.app itself
+// exports: LANG=en_US.UTF-8 plus the encoding-only LC_CTYPE=UTF-8; on
+// Linux C.UTF-8 is the nearest equivalent). Injected *only* when the
+// launching environment carries no locale — an explicit one from the
+// parent (LC_ALL=C included) or from the caller's `env` is never
+// overridden.
+#ifdef __APPLE__
+inline constexpr const char* kFallbackLang = "en_US.UTF-8";
+inline constexpr const char* kFallbackCtype = "UTF-8";
+#else
+inline constexpr const char* kFallbackLang = "C.UTF-8";
+inline constexpr const char* kFallbackCtype = "C.UTF-8";
+#endif
+
+// True when `entries` (the "KEY=value" strings a process environment is
+// made of) carries a locale setlocale() would honor: a non-empty LC_ALL,
+// LC_CTYPE or LANG. The fallback locale above is injected only when this
+// is false.
+bool hasLocaleEnv(const std::vector<std::string>& entries);
+
 // The narrow pty surface the reader thread drives (Python's PtyLike
 // protocol) — Session depends on this, not on Pty directly, so tests
 // can substitute a pipe-based fake.
@@ -44,9 +70,11 @@ class Pty : public PtyLike {
 public:
     // Spawn a child with its own session. `command` defaults to $SHELL.
     // `env` entries are merged over the parent's environment; the child
-    // always sees TERM=xterm-256color, COLORTERM=truecolor and
-    // COLUMNS/LINES forced (the parent's values are irrelevant to the
-    // session). `cwd` chdirs the child before exec.
+    // always sees TERM=xterm-256color and COLORTERM=truecolor forced,
+    // COLUMNS/LINES stripped (they would freeze the size the child
+    // reports), and the kFallbackLang/kFallbackCtype locale injected
+    // when the launching environment carries none (see above). `cwd`
+    // chdirs the child before exec.
     Pty(std::vector<std::string> command = {},
         std::vector<std::pair<std::string, std::string>> env = {},
         std::string cwd = "", int rows = 24, int cols = 80);
